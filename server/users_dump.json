@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "email": "admin@idle.dev",
+    "role": "admin"
+  },
+  {
+    "id": 2,
+    "email": "instructor@idle.dev",
+    "role": "student"
+  },
+  {
+    "id": 4,
+    "email": "sakthi@gmail.com",
+    "role": "student"
+  },
+  {
+    "id": 5,
+    "email": "sundarsakthi450@gmail.com",
+    "role": "student"
+  },
+  {
+    "id": 10,
+    "email": "test_supa@example.com",
+    "role": "student"
+  },
+  {
+    "id": 3,
+    "email": "student@idle.dev",
+    "role": "student"
+  },
+  {
+    "id": 11,
+    "email": "instructor@idle.local",
+    "role": "admin"
+  },
+  {
+    "id": 12,
+    "email": "testuser@example.com",
+    "role": "student"
+  },
+  {
+    "id": 13,
+    "email": "alice@idle.dev",
+    "role": "student"
+  }
+]
