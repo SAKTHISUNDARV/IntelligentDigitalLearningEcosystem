@@ -1,147 +1,157 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { MdEmail } from "react-icons/md";
-import { RiLockPasswordLine } from "react-icons/ri";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
-import api from "../services/api";
+// pages/Login.jsx — with dev quick-fill credentials
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Mail, Lock, Eye, EyeOff, GraduationCap, Zap } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import notify from '../utils/notify';
 
-/* ---------------- Alert ---------------- */
+const DEV_ACCOUNTS = [
+  { label: 'Admin', email: 'admin@idle.dev', password: 'Admin@1234' },
+  { label: 'Student', email: 'student@idle.dev', password: 'Admin@1234' },
+];
 
-function Alert({ message, type, onClose }) {
-  if (!message) return null;
+const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const showDevLogin = import.meta.env.DEV || isLocalHost;
 
-  return (
-    <div
-      className={`p-3 rounded mb-4 flex justify-between items-center text-sm
-      ${type === "success"
-        ? "bg-green-100 text-green-700"
-        : "bg-red-100 text-red-700"}`}
-    >
-      <span>{message}</span>
-      <button onClick={onClose}>✖</button>
-    </div>
-  );
-}
-
-/* ---------------- Login ---------------- */
 
 export default function Login() {
-
+  const { login } = useAuth();
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const [values, setValues] = useState({
-    email: "",
-    password: ""
-  });
-
-  const [alert, setAlert] = useState({
-    message: "",
-    type: "success"
-  });
-
-  const handleChange = (e) => {
-    setValues({ ...values, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const runLogin = async (email, password) => {
+    setError('');
+    setLoading(true);
     try {
-      const res = await api.post("/auth/login", values);
-
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-
-      navigate("/dashboard");
-
-    } catch (error) {
-      setAlert({
-        message: error.response?.data?.message || "Invalid email or password",
-        type: "error"
-      });
+      await login(email.trim().toLowerCase(), password.trim());
+      notify.success('Login successful', 'Welcome back to IDLE.');
+      navigate('/');
+    } catch (err) {
+      const message = err.response?.data?.error || 'Invalid email or password';
+      setError(message);
+      notify.error('Login failed', message);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleSubmit = async e => {
+    e.preventDefault();
+    await runLogin(form.email, form.password);
+  };
+
+  const handleDevLogin = async account => {
+    setForm({ email: account.email, password: account.password });
+    await runLogin(account.email, account.password);
+  };
+
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f5f7fb] px-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-6 bg-slate-100"
+      style={{
+        '--bg': '#f1f5f9', '--surface': '#ffffff', '--surface-2': '#f8fafc',
+        '--surface-3': '#e2e8f0', '--border': '#e2e8f0', '--border-focus': '#6366f1',
+        '--text-primary': '#1e293b', '--text-secondary': '#475569', '--text-muted': '#94a3b8',
+      }}
+    >
+      <div className="w-full max-w-sm">
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
 
-      <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8">
+          {/* Logo */}
+          <div className="flex items-center gap-3 mb-6 pb-5 border-b border-slate-100">
+            <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center shadow shadow-indigo-200">
+              <GraduationCap size={20} className="text-white" />
+            </div>
+            <div>
+              <p className="text-lg font-black text-slate-800 tracking-tight leading-none">IDLE</p>
+              <p className="text-[10px] font-semibold text-indigo-500 tracking-widest uppercase">Learning Platform</p>
+            </div>
+          </div>
 
-        <Alert
-          message={alert.message}
-          type={alert.type}
-          onClose={() => setAlert({ message: "", type: "success" })}
-        />
+          <div className="mb-5">
+            <h2 className="text-xl font-bold text-slate-800">Welcome back</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Sign in to continue learning</p>
+          </div>
 
-        <h1 className="text-3xl font-bold text-center text-gray-800">
-          Sign In
-        </h1>
 
-        <p className="text-center text-gray-500 mb-8">
-          Access your learning dashboard
-        </p>
+          {error && (
+            <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-
-          {/* Email */}
-          <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2">
-            <MdEmail className="text-blue-600 mr-2" />
-            <input
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              label="Email address"
               type="email"
-              name="email"
-              placeholder="Email"
-              value={values.email}
-              onChange={handleChange}
+              placeholder="E-mail"
+              icon={Mail}
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
               required
-              className="bg-transparent w-full outline-none"
+              autoComplete="email"
             />
-          </div>
-
-          {/* Password */}
-          <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2 relative">
-            <RiLockPasswordLine className="text-blue-600 mr-2" />
-
-            <input
-              type={showPassword ? "text" : "password"}
-              name="password"
-              placeholder="Password"
-              value={values.password}
-              onChange={handleChange}
+            <Input
+              label="Password"
+              type={showPw ? 'text' : 'password'}
+              placeholder="••••••••"
+              icon={Lock}
+              iconRight={
+                <button type="button" onClick={() => setShowPw(s => !s)} className="cursor-pointer text-slate-400 hover:text-slate-600 flex items-center">
+                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              }
+              value={form.password}
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
               required
-              className="bg-transparent w-full outline-none pr-8"
+              autoComplete="current-password"
             />
+            <Button type="submit" size="lg" loading={loading} className="w-full">
+              {!loading && 'Sign In'}
+            </Button>
+          </form>
 
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 text-gray-600"
-            >
-              {showPassword ? <FaEye /> : <FaEyeSlash />}
-            </button>
-          </div>
+          {showDevLogin && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+              <div className="flex items-center gap-2 text-amber-900">
+                <Zap size={15} />
+                <p className="text-sm font-semibold">Quick dev login</p>
+              </div>
+              <p className="mt-1 text-xs text-amber-800">
+                Use the seeded demo accounts for local testing.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {DEV_ACCOUNTS.map(account => (
+                  <Button
+                    key={account.email}
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    disabled={loading}
+                    onClick={() => handleDevLogin(account)}
+                    className="w-full border-amber-300 bg-white text-amber-900 hover:bg-amber-100 hover:border-amber-400"
+                  >
+                    {account.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          {/* Submit */}
-          <button
-            type="submit"
-            className="w-full py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
-          >
-            Sign In
-          </button>
 
-          {/* Register */}
-          <p className="text-center text-gray-600 mt-4">
-            Don’t have an account?{" "}
-            <span
-              onClick={() => navigate("/register")}
-              className="text-blue-600 cursor-pointer font-semibold"
-            >
-              Register
-            </span>
+          <p className="text-center text-sm text-slate-500 mt-5">
+            Don&apos;t have an account?{' '}
+            <Link to="/register" className="text-indigo-600 font-semibold hover:underline">
+              Create one
+            </Link>
           </p>
-
-        </form>
-
+        </div>
       </div>
     </div>
   );

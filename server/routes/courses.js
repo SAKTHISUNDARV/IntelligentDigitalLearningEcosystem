@@ -12,6 +12,15 @@ router.get('/', optionalAuth, async (req, res) => {
   try {
     let where = ['c.is_approved = TRUE', 'c.is_published = TRUE'];
     const params = [];
+    const coursesFromClause = `
+      FROM courses c
+      JOIN users u ON u.id = c.instructor_id
+      LEFT JOIN categories cat ON cat.id = c.category_id
+    `;
+    const countFromClause = `
+      FROM courses c
+      LEFT JOIN categories cat ON cat.id = c.category_id
+    `;
 
     if (search) {
       params.push(`%${search}%`);
@@ -46,9 +55,7 @@ router.get('/', optionalAuth, async (req, res) => {
               u.full_name AS instructor_name,
               cat.name AS category_name,
               COUNT(DISTINCT e.id) AS enrollment_count
-       FROM courses c
-       JOIN users u ON u.id = c.instructor_id
-       LEFT JOIN categories cat ON cat.id = c.category_id
+       ${coursesFromClause}
        LEFT JOIN enrollments e ON e.course_id = c.id
        ${whereClause}
        GROUP BY c.id, u.full_name, cat.name
@@ -57,7 +64,7 @@ router.get('/', optionalAuth, async (req, res) => {
       params
     );
 
-    const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM courses c ${whereClause}`,
+    const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total ${countFromClause} ${whereClause}`,
       params.slice(0, -2) // remove limit and offset
     );
 
@@ -218,7 +225,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
 // ── POST /api/courses — create course (admin/course admin) ─────────────
 router.post('/', authenticateToken, requireRole('admin'), async (req, res) => {
-  const { title, description, category_id, level, duration_hours, thumbnail_url, price, tags } = req.body;
+  const { title, description, category_id, level, duration_hours, thumbnail_url, price, tags, is_published } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
 
   try {
@@ -230,10 +237,14 @@ router.post('/', authenticateToken, requireRole('admin'), async (req, res) => {
         duration_hours || 0, thumbnail_url || null,
         price || 0.00, JSON.stringify(tags || []),
         true, // admin-created courses are auto-approved
-        true  // auto-published
+        is_published !== undefined ? !!is_published : true
       ]
     );
-    res.status(201).json({ id: result[0]?.id, title, message: 'Course created and published.' });
+    res.status(201).json({
+      id: result[0]?.id,
+      title,
+      message: is_published === false ? 'Course created as draft.' : 'Course created and published.'
+    });
   } catch (err) {
     console.error('[POST /courses]', err);
     res.status(500).json({ error: 'Server error' });
@@ -258,8 +269,11 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => 
       }
     }
 
+    const nextPublished = is_published !== undefined ? !!is_published : course.is_published;
+    const nextApproved = nextPublished ? true : course.is_approved;
+
     await pool.query(`UPDATE courses SET title=$1, description=$2, category_id=$3, level=$4, duration_hours=$5,
-       thumbnail_url=$6, price=$7, tags=$8, is_published=$9, updated_at=NOW() WHERE id=$10`,
+       thumbnail_url=$6, price=$7, tags=$8, is_published=$9, is_approved=$10, updated_at=NOW() WHERE id=$11`,
       [
         title !== undefined ? title : course.title,
         description !== undefined ? description : course.description,
@@ -269,7 +283,8 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => 
         thumbnail_url !== undefined ? thumbnail_url : course.thumbnail_url,
         price !== undefined ? price : course.price,
         tags !== undefined ? JSON.stringify(tags) : JSON.stringify(currentTags),
-        is_published !== undefined ? !!is_published : course.is_published,
+        nextPublished,
+        nextApproved,
         courseId
       ]
     );

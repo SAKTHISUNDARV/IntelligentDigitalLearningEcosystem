@@ -32,7 +32,9 @@ function makeRefreshToken(user) {
 
 // ── POST /api/auth/register ─────────────────────────────────
 router.post('/register', async (req, res) => {
-  const { email, password, full_name } = req.body;
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '').trim();
+  const full_name = String(req.body.full_name || '').trim();
 
   if (!email || !password || !full_name) {
     return res.status(400).json({ error: 'email, password, and full_name are required' });
@@ -73,7 +75,8 @@ router.post('/register', async (req, res) => {
 
 // ── POST /api/auth/login ────────────────────────────────────
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '').trim();
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' });
   }

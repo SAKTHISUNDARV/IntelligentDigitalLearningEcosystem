@@ -1,10 +1,16 @@
-// pages/AITutor.jsx — AI Chat Assist page
-import AIChatbot from '../components/AIChatbot';
+import { Suspense, lazy } from 'react';
+import { CenteredPageSkeleton } from '../components/ui/LoadingState';
+
+const AIChatbot = lazy(() => import('../components/AIChatbot'));
+
+function AssistantLoader() {
+    return <CenteredPageSkeleton />;
+}
 
 export default function AITutor() {
     return (
-        <div className="-m-6 md:-m-8 h-[calc(100vh-60px)]">
+        <Suspense fallback={<AssistantLoader />}>
             <AIChatbot />
-        </div>
+        </Suspense>
     );
 }

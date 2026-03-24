@@ -1,9 +1,9 @@
 // components/Sidebar.jsx — Role-aware sidebar (admin + student only)
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, BookMarked, ClipboardList, History,
-  User, BarChart2, Users, Tag,
-  LogOut, ChevronRight, Sparkles, GraduationCap, BrainCircuit, MessageSquare, Bot
+  User, Users, Tag,
+  LogOut, ChevronRight, Sparkles, GraduationCap, BrainCircuit, Bot, ListTodo
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -12,10 +12,10 @@ const navConfig = {
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/courses', icon: BookOpen, label: 'Browse Courses' },
     { to: '/my-courses', icon: BookMarked, label: 'My Courses' },
+    { to: '/manage-tasks', icon: ListTodo, label: 'Manage Tasks' },
     { to: '/assessments', icon: ClipboardList, label: 'Assessments' },
-    { to: '/assessment-history', icon: History, label: 'My Results' },
-    { to: '/ai-tutor', icon: Bot, label: 'AI Chat Assist' },
-    { to: '/forum', icon: MessageSquare, label: 'Community Forum' },
+    { to: '/assessment-history', icon: History, label: 'Results' },
+    { to: '/ai-tutor', icon: Bot, label: 'AI Assistant' },
     { to: '/profile', icon: User, label: 'Profile' },
   ],
   admin: [
@@ -24,13 +24,17 @@ const navConfig = {
     { to: '/admin/courses', icon: BookOpen, label: 'Courses' },
     { to: '/admin/quizzes', icon: BrainCircuit, label: 'AI Quizzes' },
     { to: '/admin/categories', icon: Tag, label: 'Categories' },
-    { to: '/admin/analytics', icon: BarChart2, label: 'Analytics' },
-    { to: '/ai-tutor', icon: Bot, label: 'AI Chat Assist' },
-    { to: '/forum', icon: MessageSquare, label: 'Community Forum' },
+    { to: '/ai-tutor', icon: Bot, label: 'AI Assistant' },
     { to: '/profile', icon: User, label: 'Profile' },
   ],
 };
 
+// Extra path-prefix overrides: if current path starts with prefix, treat `to` as active
+const activeOverrides = [
+  { prefix: '/learn/', highlightTo: '/my-courses' },
+  { prefix: '/courses/', highlightTo: '/courses' },
+  { prefix: '/assessment-result/', highlightTo: '/assessment-history' },
+];
 
 const roleConfig = {
   student: { label: 'Student', color: 'text-indigo-600', bg: 'bg-indigo-50' },
@@ -40,9 +44,14 @@ const roleConfig = {
 export default function Sidebar({ open, onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const role = user?.role || 'student';
   const links = navConfig[role] || navConfig.student;
   const rc = roleConfig[role] || roleConfig.student;
+
+  // Determine if a link should be forced-active based on overrides
+  const isForceActive = (to) =>
+    activeOverrides.some(o => location.pathname.startsWith(o.prefix) && o.highlightTo === to);
 
   const handleLogout = async () => {
     await logout();
@@ -72,48 +81,92 @@ export default function Sidebar({ open, onClose }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-2">
-            Menu
-          </p>
-          {links.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              onClick={onClose}
-              className={({ isActive }) => `
-                group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
-                transition-all duration-150
-                ${isActive
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
-                }
-              `}
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon size={16} className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'} />
-                  <span className="flex-1">{label}</span>
-                  {isActive && <ChevronRight size={12} className="text-indigo-200" />}
-                </>
-              )}
-            </NavLink>
-          ))}
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+          {role !== 'admin' && (
+            <>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-2">
+                Menu
+              </p>
+              <div className="space-y-0.5">
+                {links.map(({ to, icon: Icon, label }) => {
+                  const forced = isForceActive(to);
+                    return (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={to === '/'}
+                      onClick={onClose}
+                      className={({ isActive }) => {
+                        const active = isActive || forced;
+                        return `group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+                          transition-all duration-150
+                          ${active
+                            ? 'bg-[rgba(108,99,255,0.12)] text-[#6C63FF] rounded-[10px]'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                          }`;
+                      }}
+                    >
+                      {({ isActive }) => {
+                        const active = isActive || forced;
+                        return (
+                          <>
+                            {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-[#6C63FF]" />}
+                            <Icon size={16} className={active ? 'text-[#6C63FF]' : 'text-slate-400 group-hover:text-slate-600'} />
+                            <span className="flex-1">{label}</span>
+                            {active && <ChevronRight size={12} className="text-[#6C63FF]" />}
+                          </>
+                        );
+                      }}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {role === 'admin' && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-2">
+                Menu
+              </p>
+              <div className="space-y-0.5">
+                {links.map(({ to, icon: Icon, label }) => {
+                  const forced = isForceActive(to);
+                  return (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={to === '/'}
+                      onClick={onClose}
+                      className={({ isActive }) => {
+                        const active = isActive || forced;
+                        return `group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+                          transition-all duration-150
+                          ${active
+                            ? 'bg-[rgba(108,99,255,0.12)] text-[#6C63FF] rounded-[10px]'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                          }`;
+                      }}
+                    >
+                      {({ isActive }) => {
+                        const active = isActive || forced;
+                        return (
+                          <>
+                            {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-[#6C63FF]" />}
+                            <Icon size={16} className={active ? 'text-[#6C63FF]' : 'text-slate-400 group-hover:text-slate-600'} />
+                            <span className="flex-1">{label}</span>
+                            {active && <ChevronRight size={12} className="text-[#6C63FF]" />}
+                          </>
+                        );
+                      }}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </nav>
 
-        {/* AI tip — student only */}
-        {role === 'student' && (
-          <div className="mx-3 mb-3 p-3 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles size={12} className="text-indigo-500" />
-              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">AI Powered</span>
-            </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Get personalized course recommendations from our AI engine.
-            </p>
-          </div>
-        )}
 
         {/* Role badge */}
         <div className={`mx-3 mb-2 px-3 py-1.5 rounded-lg ${rc.bg} flex items-center gap-2`}>

@@ -7,6 +7,33 @@ const { createChatCompletion } = require('../utils/openrouter');
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
+function extractJsonObject(raw) {
+  const text = String(raw || '').trim();
+  if (!text) throw new Error('Empty AI response');
+
+  const fencedMatch = text.match(/```json\s*([\s\S]*?)```/i) || text.match(/```\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch ? fencedMatch[1].trim() : text;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error('No JSON object found in AI response');
+  }
+
+  return candidate.slice(start, end + 1);
+}
+
+function parseRecommendations(raw) {
+  const parsed = JSON.parse(extractJsonObject(raw));
+  return {
+    next_lesson: typeof parsed.next_lesson === 'string' ? parsed.next_lesson : 'Continue learning with your current plan.',
+    suggested_courses: Array.isArray(parsed.suggested_courses) ? parsed.suggested_courses : [],
+    focus_areas: Array.isArray(parsed.focus_areas) ? parsed.focus_areas : [],
+    difficulty_level: typeof parsed.difficulty_level === 'string' ? parsed.difficulty_level : 'intermediate',
+    confidence_score: Number.isFinite(Number(parsed.confidence_score)) ? Number(parsed.confidence_score) : 0.5
+  };
+}
+
 // ── POST /api/recommendations — get AI-powered recommendations ─
 router.post('/', authenticateToken, requireRole('student'), async (req, res) => {
   try {
@@ -71,7 +98,7 @@ Rules:
     });
 
     const content = aiResponse.choices?.[0]?.message?.content;
-    const recommendations = JSON.parse(content);
+    const recommendations = parseRecommendations(content);
 
     res.json({ ...recommendations, source: 'cloud_ai' });
 

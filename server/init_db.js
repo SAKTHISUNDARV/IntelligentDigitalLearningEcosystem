@@ -1,4 +1,36 @@
 const { pool } = require('./db');
+const bcrypt = require('bcrypt');
+
+const DEMO_USERS = [
+    {
+        email: 'admin@idle.dev',
+        password: 'Admin@1234',
+        full_name: 'System Admin',
+        role: 'admin'
+    },
+    {
+        email: 'student@idle.dev',
+        password: 'Admin@1234',
+        full_name: 'Demo Student',
+        role: 'student'
+    }
+];
+
+async function ensureDemoUsers() {
+    for (const demoUser of DEMO_USERS) {
+        const passwordHash = await bcrypt.hash(demoUser.password, 10);
+        await pool.query(
+            `INSERT INTO users (email, password, full_name, role, is_approved)
+             VALUES ($1, $2, $3, $4, TRUE)
+             ON CONFLICT (email) DO UPDATE SET
+               password = EXCLUDED.password,
+               full_name = EXCLUDED.full_name,
+               role = EXCLUDED.role,
+               is_approved = TRUE`,
+            [demoUser.email, passwordHash, demoUser.full_name, demoUser.role]
+        );
+    }
+}
 
 /**
  * Ensures critical tables exist.
@@ -19,6 +51,43 @@ async function initDb() {
       ADD COLUMN IF NOT EXISTS last_login TIMESTAMP NULL;
     `);
 
+        const [quizzesExist] = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'quizzes'");
+        if (quizzesExist.length > 0) {
+            await pool.query(`
+        ALTER TABLE quizzes
+        ADD COLUMN IF NOT EXISTS module_id INTEGER REFERENCES modules(id) ON DELETE CASCADE;
+
+        ALTER TABLE quizzes
+        ADD COLUMN IF NOT EXISTS quiz_type VARCHAR(20) DEFAULT 'module';
+
+        ALTER TABLE quizzes
+        ALTER COLUMN pass_score SET DEFAULT 60;
+      `);
+
+            await pool.query(`
+        UPDATE quizzes
+        SET quiz_type = CASE WHEN module_id IS NULL THEN 'final' ELSE 'module' END
+        WHERE quiz_type IS NULL OR quiz_type NOT IN ('module', 'final');
+
+        UPDATE quizzes
+        SET pass_score = 60
+        WHERE pass_score IS DISTINCT FROM 60;
+      `);
+        }
+
+        const [quizQuestionsExist] = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'quiz_questions'");
+        if (quizQuestionsExist.length > 0) {
+            await pool.query(`
+        ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS explanation TEXT;
+        ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+        ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS option_a TEXT;
+        ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS option_b TEXT;
+        ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS option_c TEXT;
+        ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS option_d TEXT;
+        ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS correct_answer VARCHAR(1);
+      `);
+        }
+
         // 1. Tasks Table
         await pool.query(`
       CREATE TABLE IF NOT EXISTS tasks (
@@ -37,10 +106,12 @@ async function initDb() {
 
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);`);
 
+        await ensureDemoUsers();
+
         console.log('Database tables verified/created.');
     } catch (err) {
         console.error('Database initialization error:', err.message);
-        // We don't exit process here so the app can still try to run
+        throw err;
     }
 }
 

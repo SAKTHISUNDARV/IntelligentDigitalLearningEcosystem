@@ -1,166 +1,125 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { MdEmail, MdPerson } from "react-icons/md";
-import { RiLockPasswordLine } from "react-icons/ri";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
-import api from "../services/api";
-
-/* ---------------- Alert ---------------- */
-
-function Alert({ message, type, onClose }) {
-  if (!message) return null;
-
-  return (
-    <div
-      className={`p-3 rounded mb-4 flex justify-between items-center text-sm
-      ${type === "success"
-        ? "bg-green-100 text-green-700"
-        : "bg-red-100 text-red-700"}`}
-    >
-      <span>{message}</span>
-      <button onClick={onClose}>✖</button>
-    </div>
-  );
-}
-
-/* ---------------- Register ---------------- */
+// pages/Register.jsx — Student registration only
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Mail, Lock, User, Eye, EyeOff, GraduationCap } from 'lucide-react';
+import api from '../services/api';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import notify from '../utils/notify';
 
 export default function Register() {
-
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState({ full_name: '', email: '', password: '' });
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const [values, setValues] = useState({
-    name: "",
-    email: "",
-    password: ""
-  });
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const [alert, setAlert] = useState({
-    message: "",
-    type: "success"
-  });
-
-  const handleChange = (e) => {
-    setValues({ ...values, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
-
+    setError('');
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(form.password)) {
+      const message = 'Password must be at least 8 characters, with uppercase, lowercase and numbers.';
+      setError(message);
+      notify.warning('Weak password', message);
+      return;
+    }
+    setLoading(true);
     try {
-      await api.post("/auth/register", values);
-
-      setAlert({
-        message: "Registration successful! Please login.",
-        type: "success"
-      });
-
-      setTimeout(() => {
-        navigate("/");
-      }, 1000);
-
-    } catch (error) {
-      setAlert({
-        message: error.response?.data?.message || "Registration failed",
-        type: "error"
-      });
+      await api.post('/auth/register', { full_name: form.full_name, email: form.email, password: form.password });
+      notify.success('Registration successful', 'Your account has been created. Please sign in.');
+      navigate('/login');
+    } catch (err) {
+      const message = err.response?.data?.error || 'Registration failed';
+      setError(message);
+      notify.error('Registration failed', message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f5f7fb] px-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-6 bg-slate-100"
+      style={{
+        '--bg': '#f1f5f9', '--surface': '#ffffff', '--surface-2': '#f8fafc',
+        '--surface-3': '#e2e8f0', '--border': '#e2e8f0', '--border-focus': '#6366f1',
+        '--text-primary': '#1e293b', '--text-secondary': '#475569', '--text-muted': '#94a3b8',
+      }}
+    >
+      <div className="w-full max-w-sm">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
 
-      <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8">
+          {/* Logo inside card */}
+          <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100">
+            <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center shadow shadow-indigo-200">
+              <GraduationCap size={20} className="text-white" />
+            </div>
+            <div>
+              <p className="text-lg font-black text-slate-800 tracking-tight leading-none">IDLE</p>
+              <p className="text-[10px] font-semibold text-indigo-500 tracking-widest uppercase">Learning Platform</p>
+            </div>
+          </div>
 
-        <Alert
-          message={alert.message}
-          type={alert.type}
-          onClose={() => setAlert({ message: "", type: "success" })}
-        />
+          <div className="mb-4">
+            <h2 className="text-lg font-bold text-slate-800">Create your account</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Start your learning journey today</p>
+          </div>
 
-        <h1 className="text-3xl font-bold text-center text-gray-800">
-          Create Account
-        </h1>
+          {error && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+              {error}
+            </div>
+          )}
 
-        <p className="text-center text-gray-500 mb-8">
-          Start your learning journey
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-
-          {/* Name */}
-          <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2">
-            <MdPerson className="text-blue-600 mr-2" />
-            <input
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <Input
+              label="Full Name"
               type="text"
-              name="name"
-              placeholder="Full Name"
-              value={values.name}
-              onChange={handleChange}
+              placeholder="Your Name"
+              icon={User}
+              value={form.full_name}
+              onChange={e => setF('full_name', e.target.value)}
               required
-              className="bg-transparent w-full outline-none"
             />
-          </div>
-
-          {/* Email */}
-          <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2">
-            <MdEmail className="text-blue-600 mr-2" />
-            <input
+            <Input
+              label="Email"
               type="email"
-              name="email"
-              placeholder="Email"
-              value={values.email}
-              onChange={handleChange}
+              placeholder="E-mail"
+              icon={Mail}
+              value={form.email}
+              onChange={e => setF('email', e.target.value)}
               required
-              className="bg-transparent w-full outline-none"
             />
-          </div>
-
-          {/* Password */}
-          <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2 relative">
-            <RiLockPasswordLine className="text-blue-600 mr-2" />
-
-            <input
-              type={showPassword ? "text" : "password"}
-              name="password"
-              placeholder="Password"
-              value={values.password}
-              onChange={handleChange}
+            <Input
+              label="Password"
+              type={showPw ? 'text' : 'password'}
+              placeholder="Min. 8 characters"
+              icon={Lock}
+              iconRight={
+                <button type="button" onClick={() => setShowPw(s => !s)} className="cursor-pointer text-slate-400 hover:text-slate-600 flex items-center">
+                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              }
+              value={form.password}
+              onChange={e => setF('password', e.target.value)}
               required
-              className="bg-transparent w-full outline-none pr-8"
             />
 
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 text-gray-600"
-            >
-              {showPassword ? <FaEye /> : <FaEyeSlash />}
-            </button>
-          </div>
+            <Button type="submit" size="lg" loading={loading} className="w-full">
+              {!loading && 'Create Account'}
+            </Button>
+          </form>
 
-          {/* Submit */}
-          <button
-            type="submit"
-            className="w-full py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
-          >
-            Register
-          </button>
-
-          {/* Login */}
-          <p className="text-center text-gray-600 mt-4">
-            Already have an account?{" "}
-            <span
-              onClick={() => navigate("/")}
-              className="text-blue-600 cursor-pointer font-semibold"
-            >
-              Sign In
-            </span>
+          <p className="text-center text-sm text-slate-500 mt-4">
+            Already have an account?{' '}
+            <Link to="/login" className="text-indigo-600 font-semibold hover:underline">
+              Sign in
+            </Link>
           </p>
-
-        </form>
-
+        </div>
       </div>
     </div>
   );

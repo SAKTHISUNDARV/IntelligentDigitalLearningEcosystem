@@ -47,6 +47,17 @@ function normalizeMessages(messages) {
     ];
 }
 
+function normalizeProviderErrorMessage(message) {
+    const text = String(message || '').trim();
+    if (/user not found/i.test(text)) {
+        return 'OpenRouter API key is invalid, revoked, or tied to a missing account.';
+    }
+    if (/no endpoints available matching your guardrail restrictions and data policy/i.test(text)) {
+        return 'No OpenRouter providers match your current privacy/data-policy settings for this model.';
+    }
+    return text;
+}
+
 function resolveModels(models) {
     const configuredModels = process.env.OPENROUTER_MODELS
         ? process.env.OPENROUTER_MODELS.split(',').map(model => model.trim()).filter(Boolean)
@@ -107,7 +118,7 @@ async function createChatCompletion({
 
             return response.data;
         } catch (err) {
-            lastError = err.response?.data?.error?.message || err.message;
+            lastError = normalizeProviderErrorMessage(err.response?.data?.error?.message || err.message);
             failures.push(`${model}: ${lastError}`);
             console.warn(`[OpenRouter] ${model} failed: ${lastError}`);
         }
@@ -166,7 +177,7 @@ async function streamChatCompletion({
 
                 if (!response.ok || !response.body) {
                     const errorText = await response.text();
-                    const message = errorText || `Streaming request failed with status ${response.status}`;
+                    const message = normalizeProviderErrorMessage(errorText || `Streaming request failed with status ${response.status}`);
                     failures.push(`${model}: ${message}`);
                     console.warn(`[OpenRouter Stream] ${model} failed: ${message}`);
                     continue;
@@ -174,7 +185,9 @@ async function streamChatCompletion({
 
                 return { model, stream: response.body };
             } catch (err) {
-                const message = err.name === 'AbortError' ? 'Streaming request timed out' : err.message;
+                const message = err.name === 'AbortError'
+                    ? 'Streaming request timed out'
+                    : normalizeProviderErrorMessage(err.message);
                 failures.push(`${model}: ${message}`);
                 console.warn(`[OpenRouter Stream] ${model} failed: ${message}`);
             }

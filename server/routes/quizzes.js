@@ -23,6 +23,10 @@ function requiredQuestionCount(quizType) {
     return quizType === 'final' ? 60 : 15;
 }
 
+const DEFAULT_PASS_SCORE = 60;
+const MODULE_QUIZ_UNLOCK_PERCENT = 80;
+const FINAL_QUIZ_UNLOCK_PERCENT = 80;
+
 function normalizeOptions(options) {
     if (!Array.isArray(options)) return [];
     if (options.length === 4 && typeof options[0] === 'object') {
@@ -37,12 +41,154 @@ function normalizeOptions(options) {
     }));
 }
 
+function resolvePassScore(passScore) {
+    const parsed = Number(passScore);
+    if (!Number.isFinite(parsed)) return DEFAULT_PASS_SCORE;
+    return Math.min(100, Math.max(0, Math.round(parsed)));
+}
+
+function normalizeQuestionRow(row) {
+    let parsedOptions = [];
+
+    if (Array.isArray(row.options)) {
+        parsedOptions = normalizeOptions(row.options);
+    } else if (typeof row.options === 'string' && row.options.trim()) {
+        try {
+            parsedOptions = normalizeOptions(JSON.parse(row.options));
+        } catch {
+            parsedOptions = [];
+        }
+    }
+
+    if (!parsedOptions.length) {
+        parsedOptions = [
+            { label: 'A', text: String(row.option_a || '') },
+            { label: 'B', text: String(row.option_b || '') },
+            { label: 'C', text: String(row.option_c || '') },
+            { label: 'D', text: String(row.option_d || '') }
+        ];
+    }
+
+    return {
+        id: row.id,
+        question_text: row.question_text || '',
+        options: parsedOptions,
+        correct: String(row.correct || row.correct_answer || 'A').toUpperCase(),
+        explanation: row.explanation || '',
+        sort_order: Number(row.sort_order || 0)
+    };
+}
+
+function buildExplanation(question, chosenAnswer = null) {
+    const savedExplanation = String(question?.explanation || '').trim();
+    if (savedExplanation) return savedExplanation;
+
+    const options = Array.isArray(question?.options) ? question.options : [];
+    const correctLabel = String(question?.correct || '').toUpperCase();
+    const correctOption = options.find((opt) => String(opt?.label || '').toUpperCase() === correctLabel);
+    const chosenLabel = chosenAnswer ? String(chosenAnswer).toUpperCase() : null;
+    const chosenOption = chosenLabel
+        ? options.find((opt) => String(opt?.label || '').toUpperCase() === chosenLabel)
+        : null;
+
+    if (chosenLabel && chosenLabel === correctLabel && correctOption?.text) {
+        return `Correct. ${correctLabel} is the right answer because ${correctOption.text}.`;
+    }
+
+    if (correctOption?.text && chosenOption?.text) {
+        return `${correctLabel} is the correct answer: ${correctOption.text}. Your choice ${chosenLabel} was ${chosenOption.text}.`;
+    }
+
+    if (correctOption?.text) {
+        return `${correctLabel} is the correct answer: ${correctOption.text}.`;
+    }
+
+    return `The correct answer is ${correctLabel}.`;
+}
+
+function normalizeStoredAnswers(rawAnswers) {
+    if (!rawAnswers) return {};
+
+    if (typeof rawAnswers === 'object' && !Array.isArray(rawAnswers)) {
+        return rawAnswers;
+    }
+
+    if (typeof rawAnswers === 'string') {
+        try {
+            const parsed = JSON.parse(rawAnswers);
+            return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+
+    return {};
+}
+
+async function getModuleLessonProgress(userId, moduleId) {
+    const [rows] = await pool.query(
+        `SELECT
+            COUNT(l.id) AS total_lessons,
+            COUNT(lp.lesson_id) FILTER (WHERE lp.completed = TRUE) AS completed_lessons
+         FROM modules m
+         LEFT JOIN lessons l ON l.module_id = m.id
+         LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $2
+         WHERE m.id = $1
+         GROUP BY m.id`,
+        [moduleId, userId]
+    );
+
+    const stats = rows[0] || { total_lessons: 0, completed_lessons: 0 };
+    const totalLessons = Number(stats.total_lessons || 0);
+    const completedLessons = Number(stats.completed_lessons || 0);
+    const percent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 100;
+
+    return { totalLessons, completedLessons, percent };
+}
+
+async function getCourseEnrollmentProgress(userId, courseId) {
+    const [rows] = await pool.query(
+        'SELECT progress FROM enrollments WHERE student_id = $1 AND course_id = $2',
+        [userId, courseId]
+    );
+    return Number(rows[0]?.progress || 0);
+}
+
+async function getQuizAccessState(userId, quizRow) {
+    if (!quizRow) {
+        return { unlocked: false, reason: 'Quiz not found' };
+    }
+
+    if (quizRow.quiz_type === 'final' || quizRow.module_id === null) {
+        const progress = await getCourseEnrollmentProgress(userId, quizRow.course_id);
+        return {
+            unlocked: progress >= FINAL_QUIZ_UNLOCK_PERCENT,
+            percent: progress,
+            threshold: FINAL_QUIZ_UNLOCK_PERCENT,
+            reason: `Complete at least ${FINAL_QUIZ_UNLOCK_PERCENT}% of the course to unlock the final quiz.`
+        };
+    }
+
+    const moduleProgress = await getModuleLessonProgress(userId, quizRow.module_id);
+    return {
+        unlocked: moduleProgress.percent >= MODULE_QUIZ_UNLOCK_PERCENT,
+        percent: moduleProgress.percent,
+        threshold: MODULE_QUIZ_UNLOCK_PERCENT,
+        reason: `Complete at least ${MODULE_QUIZ_UNLOCK_PERCENT}% of this module to unlock the quiz.`
+    };
+}
+
 // ── GET /api/quizzes?course_id=X ──────────────────────────────
 router.get('/', authenticateToken, async (req, res) => {
     const course_id = parseInt(req.query.course_id, 10);
     if (isNaN(course_id)) return res.status(400).json({ error: 'Valid course_id required' });
     try {
-        const [rows] = await pool.query('SELECT id, module_id, quiz_type, title, description, time_limit, pass_score FROM quizzes WHERE course_id = $1 ORDER BY id DESC',
+        const [rows] = await pool.query(`SELECT id, module_id,
+                    CASE WHEN module_id IS NULL THEN 'final' ELSE 'module' END AS quiz_type,
+                    title, description, time_limit, pass_score
+             FROM quizzes
+             WHERE course_id = $1
+             ORDER BY id DESC`,
             [course_id]
         );
         res.json(rows);
@@ -56,16 +202,36 @@ router.get('/', authenticateToken, async (req, res) => {
 // MUST be defined BEFORE /:id to avoid Express matching "available" as an id
 router.get('/available', authenticateToken, requireRole('student'), async (req, res) => {
     try {
+        const userId = parseInt(req.user.sub, 10);
         const [rows] = await pool.query(`SELECT q.id, q.module_id, q.title, q.description, q.time_limit, q.pass_score,
-                    c.title AS course_title, c.id AS course_id
+                    CASE WHEN q.module_id IS NULL THEN 'final' ELSE 'module' END AS quiz_type,
+                    c.title AS course_title, c.id AS course_id,
+                    m.title AS module_title
              FROM quizzes q
              JOIN courses c ON c.id = q.course_id
              JOIN enrollments e ON e.course_id = q.course_id
+             LEFT JOIN modules m ON m.id = q.module_id
              WHERE e.student_id = $1
              ORDER BY e.enrolled_at DESC, q.id ASC`,
-            [parseInt(req.user.sub, 10)]
+            [userId]
         );
-        res.json(rows);
+
+        const quizzes = await Promise.all(rows.map(async (quiz) => {
+            const access = await getQuizAccessState(userId, quiz);
+            return {
+                ...quiz,
+                unlocked: access.unlocked,
+                progress_percent: access.percent ?? 0,
+                required_percent: access.threshold ?? MODULE_QUIZ_UNLOCK_PERCENT,
+                unlock_message: access.unlocked
+                    ? 'Quiz unlocked'
+                    : quiz.quiz_type === 'final' || quiz.module_id === null
+                        ? `Complete ${access.threshold}% of the course to attend this quiz`
+                        : `Complete ${access.threshold}% of the module to attend this quiz`
+            };
+        }));
+
+        res.json(quizzes);
     } catch (err) {
         console.error('[GET /quizzes/available]', err);
         res.status(500).json({ error: 'Server error' });
@@ -80,9 +246,19 @@ router.get('/:id', authenticateToken, async (req, res) => {
         const [quiz] = await pool.query('SELECT * FROM quizzes WHERE id = $1', [quizId]);
         if (!quiz.length) return res.status(404).json({ error: 'Quiz not found' });
 
-        const [questions] = await pool.query('SELECT id, question_text, options, correct, explanation, sort_order FROM quiz_questions WHERE quiz_id = $1 ORDER BY sort_order',
+        if (req.user.role === 'student') {
+            const access = await getQuizAccessState(parseInt(req.user.sub, 10), quiz[0]);
+            if (!access.unlocked) {
+                return res.status(403).json({ error: access.reason, progress: access.percent, required: access.threshold });
+            }
+        }
+
+        const [questionRows] = await pool.query('SELECT * FROM quiz_questions WHERE quiz_id = $1 ORDER BY id',
             [quizId]
         );
+        const questions = questionRows
+            .map(normalizeQuestionRow)
+            .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
         res.json({ ...quiz[0], questions });
     } catch (err) {
         console.error('[GET /quizzes/:id]', err);
@@ -96,6 +272,7 @@ router.post('/', authenticateToken, requireRole('admin'), async (req, res) => {
     if (!course_id || !title) return res.status(400).json({ error: 'course_id and title required' });
 
     const resolvedQuizType = resolveQuizType(quiz_type, module_id);
+    const resolvedPassScore = resolvePassScore(pass_score);
     const requiredCount = requiredQuestionCount(resolvedQuizType);
 
     if (resolvedQuizType === 'module' && !module_id) {
@@ -116,7 +293,7 @@ router.post('/', authenticateToken, requireRole('admin'), async (req, res) => {
 
         const [result] = await client.query(
             'INSERT INTO quizzes (course_id, module_id, quiz_type, title, description, time_limit, pass_score) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-            [course_id, module_id || null, resolvedQuizType, title, description || null, time_limit || 10, pass_score || 60]
+            [course_id, module_id || null, resolvedQuizType, title, description || null, time_limit || 10, resolvedPassScore]
         );
         const quizId = result[0]?.id;
 
@@ -172,6 +349,7 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => 
     if (!course_id || !title) return res.status(400).json({ error: 'course_id and title required' });
 
     const resolvedQuizType = resolveQuizType(quiz_type, module_id);
+    const resolvedPassScore = resolvePassScore(pass_score);
     const requiredCount = requiredQuestionCount(resolvedQuizType);
 
     if (resolvedQuizType === 'module' && !module_id) {
@@ -198,7 +376,7 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => 
 
         await client.query(
             'UPDATE quizzes SET course_id = $1, module_id = $2, quiz_type = $3, title = $4, description = $5, time_limit = $6, pass_score = $7 WHERE id = $8',
-            [course_id, module_id || null, resolvedQuizType, title, description || null, time_limit || 10, pass_score || 60, quizId]
+            [course_id, module_id || null, resolvedQuizType, title, description || null, time_limit || 10, resolvedPassScore, quizId]
         );
 
         await client.query('DELETE FROM quiz_questions WHERE quiz_id = $1', [quizId]);
@@ -290,39 +468,30 @@ router.get('/assessment/:id/review', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized to view this assessment' });
         }
 
-        const [questions] = await pool.query('SELECT id, question_text, options, correct, explanation, sort_order FROM quiz_questions WHERE quiz_id = $1 ORDER BY sort_order',
+        const [questionRows] = await pool.query('SELECT * FROM quiz_questions WHERE quiz_id = $1 ORDER BY id',
             [attempt.quiz_id]
         );
+        const questions = questionRows
+            .map(normalizeQuestionRow)
+            .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
 
-        let answers = {};
-        try {
-            answers = attempt.answers ? JSON.parse(attempt.answers) : {};
-        } catch {
-            answers = {};
-        }
+        const answers = normalizeStoredAnswers(attempt.answers);
 
         let correctCount = 0;
         const feedback = questions.map((q, index) => {
-            const chosen = answers[q.id] ?? null;
-            const isCorrect = String(chosen) === String(q.correct);
+            const chosen = answers[q.id] ?? answers[String(q.id)] ?? null;
+            const isCorrect = String(chosen || '').toUpperCase() === String(q.correct || '').toUpperCase();
             if (isCorrect) correctCount += 1;
-
-            let parsedOptions = [];
-            try {
-                parsedOptions = Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]');
-            } catch {
-                parsedOptions = [];
-            }
 
             return {
                 index: index + 1,
                 id: q.id,
                 question_text: q.question_text,
-                options: parsedOptions,
+                options: q.options,
                 chosen,
                 correct: q.correct,
                 is_correct: isCorrect,
-                explanation: q.explanation || ''
+                explanation: buildExplanation(q, chosen)
             };
         });
 
@@ -342,7 +511,7 @@ router.get('/assessment/:id/review', authenticateToken, async (req, res) => {
                 correct: correctCount,
                 total: questions.length,
                 score: attempt.score,
-                passed: attempt.score >= (attempt.pass_score || 50)
+                passed: attempt.score >= (attempt.pass_score || DEFAULT_PASS_SCORE)
             },
             feedback
         });
@@ -549,6 +718,7 @@ router.post('/:id/submit', authenticateToken, requireRole('student'), async (req
     const quizId = parseInt(req.params.id, 10);
     const userId = parseInt(req.user.sub, 10);
     const { answers, time_taken } = req.body;
+    logToFile(`[POST /quizzes/${quizId}/submit] received for user ${userId}`);
     
     if (isNaN(quizId)) return res.status(400).json({ error: 'Invalid quiz ID' });
     if (!answers) return res.status(400).json({ error: 'answers required' });
@@ -557,9 +727,15 @@ router.post('/:id/submit', authenticateToken, requireRole('student'), async (req
         const [quiz] = await pool.query('SELECT * FROM quizzes WHERE id = $1', [quizId]);
         if (!quiz.length) return res.status(404).json({ error: 'Quiz not found' });
 
-        const [questions] = await pool.query('SELECT id, correct, explanation FROM quiz_questions WHERE quiz_id = $1',
+        const access = await getQuizAccessState(userId, quiz[0]);
+        if (!access.unlocked) {
+            return res.status(403).json({ error: access.reason, progress: access.percent, required: access.threshold });
+        }
+
+        const [questionRows] = await pool.query('SELECT * FROM quiz_questions WHERE quiz_id = $1 ORDER BY id',
             [quizId]
         );
+        const questions = questionRows.map(normalizeQuestionRow);
 
         let correct = 0;
         const feedback = questions.map(q => {
@@ -576,20 +752,18 @@ router.post('/:id/submit', authenticateToken, requireRole('student'), async (req
         });
 
         const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
-        const passed = score >= (quiz[0].pass_score || 60);
+        const passed = score >= (quiz[0].pass_score || DEFAULT_PASS_SCORE);
 
         const [result] = await pool.query('INSERT INTO assessments (quiz_id, user_id, score, answers, passed, time_taken) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
             [quizId, userId, score, JSON.stringify(answers), passed, time_taken || 0]
         );
 
-        // Check for course completion: Score >= 80 AND Progress >= 80
+        // Mark course complete only after passing the final quiz with course progress at least 80%.
         const courseId = quiz[0].course_id;
-        const [enrollment] = await pool.query('SELECT progress FROM enrollments WHERE student_id = $1 AND course_id = $2',
-            [userId, courseId]
-        );
+        const enrollmentProgress = await getCourseEnrollmentProgress(userId, courseId);
 
         let completed = false;
-        if (enrollment.length && enrollment[0].progress >= 80 && score >= 80) {
+        if ((quiz[0].quiz_type === 'final' || quiz[0].module_id === null) && enrollmentProgress >= FINAL_QUIZ_UNLOCK_PERCENT && passed) {
             completed = true;
             await pool.query('UPDATE enrollments SET completed = TRUE, completed_at = NOW() WHERE student_id = $1 AND course_id = $2 AND completed = FALSE',
                 [userId, courseId]

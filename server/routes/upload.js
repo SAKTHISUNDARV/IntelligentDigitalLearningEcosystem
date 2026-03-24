@@ -5,8 +5,35 @@ const { createClient } = require('@supabase/supabase-js');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const path = require('path');
 
-// Initialize Supabase Client for Storage
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+);
+const IMAGE_BUCKET = 'course-images';
+const PDF_BUCKET = 'course-materials';
+
+function getErrorDetails(err) {
+  return {
+    message: err?.message || 'Unknown error',
+    name: err?.name || null,
+    statusCode: err?.statusCode || err?.status || null,
+    details: err?.details || null,
+    hint: err?.hint || null
+  };
+}
+
+async function ensureBucket(bucketName) {
+  const { data: buckets, error } = await supabase.storage.listBuckets();
+  if (error) throw error;
+
+  const existing = (buckets || []).find(bucket => bucket.name === bucketName);
+  if (existing) return;
+
+  const { error: createErr } = await supabase.storage.createBucket(bucketName, {
+    public: true
+  });
+  if (createErr) throw createErr;
+}
 
 // Configure Multer to keep files in memory
 const upload = multer({
@@ -20,11 +47,12 @@ router.post('/image', authenticateToken, requireRole('admin'), upload.single('fi
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   try {
+    await ensureBucket(IMAGE_BUCKET);
     const ext = path.extname(req.file.originalname);
     const fileName = `${Date.now()}-${req.user.sub}${ext}`;
     
     const { data, error } = await supabase.storage
-      .from('course-images')
+      .from(IMAGE_BUCKET)
       .upload(fileName, req.file.buffer, {
         contentType: req.file.mimetype,
         upsert: false
@@ -33,13 +61,17 @@ router.post('/image', authenticateToken, requireRole('admin'), upload.single('fi
     if (error) throw error;
 
     const { data: publicData } = supabase.storage
-      .from('course-images')
+      .from(IMAGE_BUCKET)
       .getPublicUrl(fileName);
 
     res.status(200).json({ url: publicData.publicUrl });
   } catch (err) {
-    console.error('[Upload Image]', err);
-    res.status(500).json({ error: 'Failed to upload image' });
+    const details = getErrorDetails(err);
+    console.error('[Upload Image]', details);
+    res.status(500).json({
+      error: details.message || 'Failed to upload image',
+      details
+    });
   }
 });
 
@@ -51,10 +83,11 @@ router.post('/pdf', authenticateToken, requireRole('admin'), upload.single('file
   }
 
   try {
+    await ensureBucket(PDF_BUCKET);
     const fileName = `${Date.now()}-${req.user.sub}.pdf`;
     
     const { data, error } = await supabase.storage
-      .from('course-materials')
+      .from(PDF_BUCKET)
       .upload(fileName, req.file.buffer, {
         contentType: 'application/pdf',
         upsert: false
@@ -63,13 +96,17 @@ router.post('/pdf', authenticateToken, requireRole('admin'), upload.single('file
     if (error) throw error;
 
     const { data: publicData } = supabase.storage
-      .from('course-materials')
+      .from(PDF_BUCKET)
       .getPublicUrl(fileName);
 
     res.status(200).json({ url: publicData.publicUrl });
   } catch (err) {
-    console.error('[Upload PDF]', err);
-    res.status(500).json({ error: 'Failed to upload pdf' });
+    const details = getErrorDetails(err);
+    console.error('[Upload PDF]', details);
+    res.status(500).json({
+      error: details.message || 'Failed to upload pdf',
+      details
+    });
   }
 });
 

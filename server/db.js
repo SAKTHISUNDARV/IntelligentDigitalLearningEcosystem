@@ -1,15 +1,35 @@
 const { Pool } = require('pg');
 require('./config/loadEnv');
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = (process.env.DATABASE_URL || '').trim().replace(/^"(.*)"$/, '$1');
 
 if (!connectionString) {
   console.error("Critical Error: DATABASE_URL is not defined in the environment.");
   process.exit(1);
 }
 
+function getConnectionMeta() {
+  try {
+    const parsed = new URL(connectionString);
+    return {
+      host: parsed.hostname,
+      port: parsed.port || '5432',
+      database: parsed.pathname?.replace(/^\//, '') || 'postgres',
+      user: parsed.username || '(unknown)',
+    };
+  } catch {
+    return {
+      host: '(invalid DATABASE_URL)',
+      port: '',
+      database: '',
+      user: '',
+    };
+  }
+}
+
 const pgPool = new Pool({
   connectionString,
+  family: 4,
   ssl: {
     rejectUnauthorized: false
   },
@@ -48,6 +68,31 @@ const wrappedPool = {
   end: () => pgPool.end()
 };
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function checkDatabaseConnection({ retries = 3, delayMs = 2500 } = {}) {
+  const meta = getConnectionMeta();
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      await pgPool.query('SELECT 1');
+      return { ok: true, meta };
+    } catch (err) {
+      lastError = err;
+      const message = err?.message || 'Unknown database connection error';
+      console.error(`[DB] Connection attempt ${attempt}/${retries} failed for ${meta.host}:${meta.port}/${meta.database}: ${message}`);
+      if (attempt < retries) {
+        await sleep(delayMs);
+      }
+    }
+  }
+
+  return { ok: false, meta, error: lastError };
+}
+
 async function createScriptConnection() {
   const client = await pgPool.connect();
   return {
@@ -60,4 +105,4 @@ async function createScriptConnection() {
   };
 }
 
-module.exports = { pool: wrappedPool, createScriptConnection };
+module.exports = { pool: wrappedPool, createScriptConnection, checkDatabaseConnection, getConnectionMeta };

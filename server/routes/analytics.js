@@ -8,6 +8,11 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 router.get('/student', authenticateToken, requireRole('student'), async (req, res) => {
   try {
     const userId = parseInt(req.user.sub, 10);
+    const [[userMeta]] = await pool.query(
+      'SELECT email, full_name FROM users WHERE id = $1',
+      [userId]
+    );
+    const isDemoStudent = userMeta?.email === 'student@idle.dev';
 
     // Stats: Enrolled, Completed, In-Progress
     const [[stats]] = await pool.query(`SELECT
@@ -98,6 +103,17 @@ router.get('/student', authenticateToken, requireRole('student'), async (req, re
     `;
     const [recentActivity] = await pool.query(activityQuery, [userId, userId, userId, userId]);
 
+    // Temporary demo skill progression for the seeded student account until
+    // a full skills engine is added on the backend.
+    const skillsProgress = isDemoStudent
+      ? [
+          { name: 'Node.js', progress: 92 },
+          { name: 'REST APIs', progress: 88 },
+          { name: 'Authentication', progress: 81 },
+          { name: 'Database Design', progress: 76 }
+        ]
+      : [];
+
     res.json({
       ...stats,
       pending_tasks_count: taskStats.pending_tasks || 0,
@@ -107,7 +123,8 @@ router.get('/student', authenticateToken, requireRole('student'), async (req, re
       upcoming_tasks: upcomingTasks,
       recent_courses: recentCourses,
       completed_courses: completedCourses,
-      recent_activity: recentActivity
+      recent_activity: recentActivity,
+      skills_progress: skillsProgress
     });
   } catch (err) {
     console.error('[GET /analytics/student]', err);

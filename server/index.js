@@ -31,6 +31,7 @@ const progressRoutes = require('./routes/progress');
 
 const app = express();
 const initDb = require('./init_db');
+const { checkDatabaseConnection } = require('./db');
 
 // Request Logger
 app.use((req, res, next) => {
@@ -106,6 +107,14 @@ app.use((err, req, res, _next) => {
 // ── Start ────────────────────────────────────────────────────────
 async function startServer() {
   try {
+    const dbStatus = await checkDatabaseConnection({ retries: 3, delayMs: 3000 });
+    if (!dbStatus.ok) {
+      const cause = dbStatus.error?.cause?.message ? ` Cause: ${dbStatus.error.cause.message}` : '';
+      console.error(`Database unavailable at ${dbStatus.meta.host}:${dbStatus.meta.port}/${dbStatus.meta.database}.${cause}`);
+      console.error('Backend startup aborted because the database connection could not be established.');
+      process.exit(1);
+    }
+
     await initDb();
     app.listen(PORT, "127.0.0.1", () => {
       console.log(`✅ IDLE Backend running on http://localhost:${PORT}`);

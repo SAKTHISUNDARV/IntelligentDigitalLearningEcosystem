@@ -1,6 +1,22 @@
-import { Navigate } from "react-router-dom";
+// components/ProtectedRoute.jsx — Redirect to login if not authenticated; enforce roles
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/" />;
+/**
+ * roles: optional array of allowed roles e.g. ['admin'] or ['instructor','admin']
+ * If roles is empty/undefined, any authenticated user can access.
+ */
+export default function ProtectedRoute({ children, roles }) {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (roles && roles.length > 0 && !roles.includes(user.role)) {
+    // Redirect to home (dashboard will show their own role view)
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 }
