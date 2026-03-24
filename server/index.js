@@ -4,14 +4,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('./config/loadEnv');
-const fs = require('fs');
-const path = require('path');
-
-const LOG_FILE = path.join(__dirname, 'server_debug.log');
-function logToFile(msg) {
-  const ts = new Date().toISOString();
-  fs.appendFileSync(LOG_FILE, `[${ts}] ${msg}\n`);
-}
 
 // Route imports
 const authRoutes = require('./routes/auth');
@@ -28,18 +20,14 @@ const recommendationsRoutes = require('./routes/recommendations');
 const chatRoutes = require('./routes/chat');
 const tasksRoutes = require('./routes/tasks');
 const progressRoutes = require('./routes/progress');
+const searchRoutes = require('./routes/search');
 
 const app = express();
 const initDb = require('./init_db');
 const { checkDatabaseConnection } = require('./db');
 
-// Request Logger
-app.use((req, res, next) => {
-  logToFile(`${req.method} ${req.path}`);
-  next();
-});
-
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 // ── Security middleware ─────────────────────────────────────────
 app.use(helmet());
@@ -80,6 +68,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/tasks', tasksRoutes);
+app.use('/api/search', searchRoutes);
 
 // ── Health check ────────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -114,13 +103,17 @@ async function startServer() {
       console.error('Backend startup aborted because the database connection could not be established.');
       process.exit(1);
     }
-
     await initDb();
-    app.listen(PORT, "127.0.0.1", () => {
-      console.log(`✅ IDLE Backend running on http://localhost:${PORT}`);
+    app.listen(PORT, HOST, () => {
+      const publicUrl = process.env.RENDER_EXTERNAL_URL || process.env.API_URL || null;
+      console.log('IDLE Backend started successfully.');
+      console.log(`Listening on ${HOST}:${PORT}`);
+      if (publicUrl) {
+        console.log(`Public URL: ${publicUrl}`);
+      }
     });
   } catch (err) {
-    console.error('❌ Failed to start server:', err);
+    console.error('Failed to start server:', err);
     process.exit(1);
   }
 }

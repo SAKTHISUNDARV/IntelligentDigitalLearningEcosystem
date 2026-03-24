@@ -16,27 +16,27 @@ router.get('/student', authenticateToken, requireRole('student'), async (req, re
 
     // Stats: Enrolled, Completed, In-Progress
     const [[stats]] = await pool.query(`SELECT
-         COUNT(*) AS enrolled_count,
-         COALESCE(COUNT(NULLIF(completed = TRUE OR progress = 100, FALSE)), 0) AS completed_count,
-         COALESCE(COUNT(NULLIF(progress > 0 AND progress < 100, FALSE)), 0) AS in_progress_count,
+         COUNT(*)::int AS enrolled_count,
+         COALESCE(SUM(CASE WHEN completed = TRUE OR progress = 100 THEN 1 ELSE 0 END), 0)::int AS completed_count,
+         COALESCE(SUM(CASE WHEN progress > 0 AND progress < 100 AND completed = FALSE THEN 1 ELSE 0 END), 0)::int AS in_progress_count,
          COALESCE(ROUND(AVG(progress), 1), 0) AS avg_progress
        FROM enrollments WHERE student_id = $1`,
       [userId]
     );
 
     // Pending tasks count
-    const [[taskStats]] = await pool.query(`SELECT COUNT(*) AS pending_tasks FROM tasks WHERE user_id = $1 AND status = 'pending'`,
+    const [[taskStats]] = await pool.query(`SELECT COUNT(*)::int AS pending_tasks FROM tasks WHERE user_id = $1 AND status = 'pending'`,
       [userId]
     );
 
     // Average quiz score
-    const [[scoreStats]] = await pool.query(`SELECT COALESCE(ROUND(AVG(score), 1), 0) AS avg_score, COUNT(*) AS quizzes_taken
+    const [[scoreStats]] = await pool.query(`SELECT COALESCE(ROUND(AVG(score), 1), 0) AS avg_score, COUNT(*)::int AS quizzes_taken
        FROM assessments WHERE user_id = $1`,
       [userId]
     );
 
     // Lessons completed
-    const [[lessonStats]] = await pool.query(`SELECT COUNT(*) AS lessons_completed
+    const [[lessonStats]] = await pool.query(`SELECT COUNT(*)::int AS lessons_completed
        FROM lesson_progress
        WHERE user_id = $1 AND completed = TRUE`,
       [userId]
@@ -60,7 +60,39 @@ router.get('/student', authenticateToken, requireRole('student'), async (req, re
     );
 
     // Recent courses (Continue Learning)
-    const [recentCourses] = await pool.query(`SELECT c.id, c.title, c.thumbnail_url, COALESCE(e.progress, 0) AS progress, e.enrolled_at, COALESCE(e.completed_at, e.enrolled_at) AS updated_at
+    const [recentCourses] = await pool.query(`SELECT c.id, c.title, c.thumbnail_url, COALESCE(e.progress, 0) AS progress,
+              e.completed, e.enrolled_at, COALESCE(e.completed_at, e.enrolled_at) AS updated_at,
+              (
+                SELECT COUNT(*)
+                FROM lessons l
+                JOIN modules m ON m.id = l.module_id
+                WHERE m.course_id = c.id
+              ) AS total_lessons,
+              (
+                SELECT COUNT(*)
+                FROM lesson_progress lp
+                JOIN lessons l ON l.id = lp.lesson_id
+                JOIN modules m ON m.id = l.module_id
+                WHERE m.course_id = c.id
+                  AND lp.user_id = e.student_id
+                  AND lp.completed = TRUE
+              ) AS completed_lessons,
+              (
+                SELECT m.title
+                FROM modules m
+                WHERE m.course_id = c.id
+                  AND EXISTS (
+                    SELECT 1
+                    FROM lessons l
+                    LEFT JOIN lesson_progress lp
+                      ON lp.lesson_id = l.id
+                     AND lp.user_id = e.student_id
+                    WHERE l.module_id = m.id
+                      AND COALESCE(lp.completed, FALSE) = FALSE
+                  )
+                ORDER BY m.sort_order ASC, m.id ASC
+                LIMIT 1
+              ) AS current_module
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
        WHERE e.student_id = $1

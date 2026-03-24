@@ -117,7 +117,23 @@ router.get('/student/enrolled', authenticateToken, requireRole('student'), async
               ) AS preview_content_url,
               u.full_name AS instructor_name,
               cat.name AS category_name,
-              e.progress, e.completed, e.enrolled_at, e.completed_at
+              (
+                SELECT m.title
+                FROM modules m
+                WHERE m.course_id = c.id
+                  AND EXISTS (
+                    SELECT 1
+                    FROM lessons l
+                    LEFT JOIN lesson_progress lp
+                      ON lp.lesson_id = l.id
+                     AND lp.user_id = e.student_id
+                    WHERE l.module_id = m.id
+                      AND COALESCE(lp.completed, FALSE) = FALSE
+                  )
+                ORDER BY m.sort_order ASC, m.id ASC
+                LIMIT 1
+              ) AS current_module,
+              e.progress, e.completed, e.enrolled_at, e.completed_at, COALESCE(e.completed_at, e.enrolled_at) AS updated_at
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
        JOIN users u ON u.id = c.instructor_id
