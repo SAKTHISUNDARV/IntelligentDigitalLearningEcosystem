@@ -33,7 +33,7 @@ export function CardTitle({ children, className = '' }) {
     );
 }
 
-export function StatCard({ label, value, sub, icon: Icon, color = 'indigo', trend }) {
+export function StatCard({ label, value, sub, icon: Icon, color = 'indigo' }) {
     const colors = {
         indigo: { text: 'text-indigo-600', dot: 'bg-indigo-500' },
         teal: { text: 'text-teal-600', dot: 'bg-teal-500' },

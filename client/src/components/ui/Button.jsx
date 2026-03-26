@@ -47,11 +47,10 @@ const Button = forwardRef(({
   loading = false,
   disabled = false,
   className = '',
-  as: Tag = 'button',
   ...props
 }, ref) => {
   return (
-    <Tag
+    <button
       ref={ref}
       disabled={disabled || loading}
       className={`
@@ -69,7 +68,7 @@ const Button = forwardRef(({
       {loading ? (
         <span className="spinner w-4 h-4" />
       ) : children}
-    </Tag>
+    </button>
   );
 });
 

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // contexts/ThemeContext.jsx — Dark / Light mode toggle
 import { createContext, useContext, useState, useEffect } from 'react';
 

@@ -1,26 +1,31 @@
+/* eslint-disable react-refresh/only-export-components */
 // contexts/AuthContext.jsx — Global auth state with JWT + localStorage persistence
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext(null);
+const readStoredAuth = () => {
+    const storedToken = localStorage.getItem('idle_token');
+    const storedUser = localStorage.getItem('idle_user');
+
+    if (!storedToken || !storedUser) {
+        return { token: null, user: null };
+    }
+
+    try {
+        return {
+            token: storedToken,
+            user: JSON.parse(storedUser),
+        };
+    } catch {
+        return { token: null, user: null };
+    }
+};
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
-    const [token, setToken] = useState(null);
-    const [ready, setReady] = useState(false); // hydration complete?
-
-    // Hydrate from localStorage on mount
-    useEffect(() => {
-        const storedToken = localStorage.getItem('idle_token');
-        const storedUser = localStorage.getItem('idle_user');
-        if (storedToken && storedUser) {
-            try {
-                setToken(storedToken);
-                setUser(JSON.parse(storedUser));
-            } catch { /* corrupted storage */ }
-        }
-        setReady(true);
-    }, []);
+    const [user, setUser] = useState(() => readStoredAuth().user);
+    const [token, setToken] = useState(() => readStoredAuth().token);
+    const [ready] = useState(true); // hydration complete?
 
     useEffect(() => {
         if (!token) return;

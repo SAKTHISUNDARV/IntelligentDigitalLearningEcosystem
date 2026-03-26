@@ -1,7 +1,6 @@
-// pages/Register.jsx — Student registration only
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, Eye, EyeOff, GraduationCap } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, GraduationCap, ArrowRight } from 'lucide-react';
 import api from '../services/api';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -9,7 +8,7 @@ import notify from '../utils/notify';
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ full_name: '', email: '', password: '' });
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm_password: '' });
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,13 +18,20 @@ export default function Register() {
   const handleSubmit = async e => {
     e.preventDefault();
     setError('');
+    
+    if (form.password !== form.confirm_password) {
+      setError('Passwords do not match');
+      return;
+    }
+
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(form.password)) {
-      const message = 'Password must be at least 8 characters, with uppercase, lowercase and numbers.';
+      const message = 'Password must be at least 8 chars with uppercase, lowercase and numbers.';
       setError(message);
       notify.warning('Weak password', message);
       return;
     }
+    
     setLoading(true);
     try {
       await api.post('/auth/register', { full_name: form.full_name, email: form.email, password: form.password });
@@ -50,10 +56,10 @@ export default function Register() {
       }}
     >
       <div className="w-full max-w-sm">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
 
-          {/* Logo inside card */}
-          <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100">
+          {/* Logo */}
+          <div className="flex items-center gap-3 mb-6 pb-5 border-b border-slate-100">
             <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center shadow shadow-indigo-200">
               <GraduationCap size={20} className="text-white" />
             </div>
@@ -63,18 +69,18 @@ export default function Register() {
             </div>
           </div>
 
-          <div className="mb-4">
-            <h2 className="text-lg font-bold text-slate-800">Create your account</h2>
+          <div className="mb-5">
+            <h2 className="text-xl font-bold">Create <span className="text-[#6366f1]">Account</span></h2>
             <p className="text-sm text-slate-500 mt-0.5">Start your learning journey today</p>
           </div>
 
           {error && (
-            <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+            <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} >
             <Input
               label="Full Name"
               type="text"
@@ -83,42 +89,65 @@ export default function Register() {
               value={form.full_name}
               onChange={e => setF('full_name', e.target.value)}
               required
+              disabled={loading}
+              className="!bg-white !border-slate-200 focus:!border-[#6366f1] focus:!ring-4 focus:!ring-[#6366f1]/10 !rounded-xl !shadow-sm transition-all text-[15px]"
             />
             <Input
-              label="Email"
+              label="Email address"
               type="email"
               placeholder="E-mail"
               icon={Mail}
               value={form.email}
               onChange={e => setF('email', e.target.value)}
               required
+              disabled={loading}
+              className="!bg-white !border-slate-200 focus:!border-[#6366f1] focus:!ring-4 focus:!ring-[#6366f1]/10 !rounded-xl !shadow-sm transition-all text-[15px]"
             />
             <Input
               label="Password"
               type={showPw ? 'text' : 'password'}
-              placeholder="Min. 8 characters"
+              placeholder="••••••••"
               icon={Lock}
               iconRight={
                 <button type="button" onClick={() => setShowPw(s => !s)} className="cursor-pointer text-slate-400 hover:text-slate-600 flex items-center">
-                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               }
               value={form.password}
               onChange={e => setF('password', e.target.value)}
               required
+              disabled={loading}
+              className="!bg-white !border-slate-200 focus:!border-[#6366f1] focus:!ring-4 focus:!ring-[#6366f1]/10 !rounded-xl !shadow-sm transition-all text-[15px]"
+            />
+            <Input
+              label="Confirm Password"
+              type={showPw ? 'text' : 'password'}
+              placeholder="••••••••"
+              icon={Lock}
+              value={form.confirm_password}
+              onChange={e => setF('confirm_password', e.target.value)}
+              required
+              disabled={loading}
+              className="!bg-white !border-slate-200 focus:!border-[#6366f1] focus:!ring-4 focus:!ring-[#6366f1]/10 !rounded-xl !shadow-sm transition-all text-[15px]"
             />
 
-            <Button type="submit" size="lg" loading={loading} className="w-full">
-              {!loading && 'Create Account'}
-            </Button>
+            <div className="pt-4">
+              <Button type="submit" size="lg" loading={loading} className="w-full !bg-[#6366f1] hover:!opacity-90 !text-white !border-transparent !shadow-lg flex items-center justify-center gap-2 group transition-all duration-300 !font-semibold !rounded-xl">
+                {!loading && (
+                  <>Create Account <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform duration-300" strokeWidth={2.5} /></>
+                )}
+              </Button>
+            </div>
           </form>
 
-          <p className="text-center text-sm text-slate-500 mt-4">
-            Already have an account?{' '}
-            <Link to="/login" className="text-indigo-600 font-semibold hover:underline">
-              Sign in
-            </Link>
-          </p>
+          <div className="mt-6 border-t border-slate-100 pt-4 flex flex-col items-center justify-center">
+            <p className="text-[14px] text-slate-500">
+              Already have an account?{' '}
+              <Link to="/login" className="font-bold text-[#6366f1] hover:opacity-80 transition-colors focus:outline-none">
+                Sign in
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>

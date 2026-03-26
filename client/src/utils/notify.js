@@ -40,13 +40,6 @@ const popup = Swal.mixin({
   },
 });
 
-const iconColors = {
-  success: '#16a34a',
-  error: '#dc2626',
-  info: '#2563eb',
-  warning: '#d97706',
-};
-
 const iconMarkup = {
   success: renderToStaticMarkup(createElement(FiCheck)),
   error: renderToStaticMarkup(createElement(FiAlertCircle)),
@@ -59,7 +52,7 @@ function escapeHtml(value = '') {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
 
@@ -68,11 +61,11 @@ function show(icon, title, text = '') {
   const safeText = escapeHtml(text);
 
   return popup.fire({
-    icon,
-    iconColor: iconColors[icon],
-    iconHtml: `<span class="idle-toast-glyph">${iconMarkup[icon] || iconMarkup.info}</span>`,
     html: `
       <div class="idle-toast-content">
+        <div class="idle-toast-inline-icon" aria-hidden="true">
+          <span class="idle-toast-glyph">${iconMarkup[icon] || iconMarkup.info}</span>
+        </div>
         <div class="idle-toast-title">${safeTitle}</div>
         ${safeText ? `<div class="idle-toast-text">${safeText}</div>` : ''}
       </div>
@@ -95,3 +88,6 @@ export const notify = {
 };
 
 export default notify;
+
+
+

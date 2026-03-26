@@ -88,7 +88,7 @@ export function Textarea({ label, hint, error, className = '', wrapperClass = ''
 }
 
 // Select variant
-export function Select({ label, hint, error, className = '', wrapperClass = '', children, ...props }) {
+export function Select({ label, error, className = '', wrapperClass = '', children, ...props }) {
     return (
         <div className={`flex flex-col gap-1.5 ${wrapperClass}`}>
             {label && (
