@@ -8,7 +8,8 @@ import DashboardLayout from './components/DashboardLayout';
 import RootError from './components/RootError';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Auth pages (eager)
+// Auth and Landing pages
+const Landing = lazy(() => import('./pages/Landing'));
 import Login from './pages/Login';
 import Register from './pages/Register';
 
@@ -23,6 +24,7 @@ const AssessmentHistory = lazy(() => import('./pages/AssessmentHistory'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ManageTasks = lazy(() => import('./pages/ManageTasks'));
 const AssessmentResultPage = lazy(() => import('./pages/AssessmentResultPage'));
+const SearchResults = lazy(() => import('./pages/SearchResults'));
 
 
 // Admin pages
@@ -55,12 +57,14 @@ const router = createBrowserRouter(
   createRoutesFromElements(
     <Route errorElement={<RootError />}>
       {/* ── Public ── */}
+      <Route path="/" element={<Suspense fallback={<PageLoader />}><Landing /></Suspense>} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
       {/* ── Shared (all authenticated roles) ── */}
-      <Route path="/" element={<DashPage><Dashboard /></DashPage>} />
+      <Route path="/dashboard" element={<DashPage><Dashboard /></DashPage>} />
       <Route path="/profile" element={<DashPage><Profile /></DashPage>} />
+      <Route path="/search" element={<DashPage><SearchResults /></DashPage>} />
       <Route path="/ai-tutor" element={<DashPage fullBleed><AITutor /></DashPage>} />
 
       {/* ── Student routes ── */}

@@ -1,4 +1,5 @@
 // components/Sidebar.jsx — Role-aware sidebar (admin + student only)
+import { createElement } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, BookMarked, ClipboardList, History,
@@ -9,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 const navConfig = {
   student: [
-    { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/courses', icon: BookOpen, label: 'Browse Courses' },
     { to: '/my-courses', icon: BookMarked, label: 'My Courses' },
     { to: '/manage-tasks', icon: ListTodo, label: 'Manage Tasks' },
@@ -19,7 +20,7 @@ const navConfig = {
     { to: '/profile', icon: User, label: 'Profile' },
   ],
   admin: [
-    { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/admin/users', icon: Users, label: 'Users' },
     { to: '/admin/courses', icon: BookOpen, label: 'Courses' },
     { to: '/admin/quizzes', icon: BrainCircuit, label: 'AI Quizzes' },
@@ -88,13 +89,13 @@ export default function Sidebar({ open, onClose }) {
                 Menu
               </p>
               <div className="space-y-0.5">
-                {links.map(({ to, icon: Icon, label }) => {
+                {links.map(({ to, icon, label }) => {
                   const forced = isForceActive(to);
                     return (
                     <NavLink
                       key={to}
                       to={to}
-                      end={to === '/'}
+                      end={to === '/dashboard'}
                       onClick={onClose}
                       className={({ isActive }) => {
                         const active = isActive || forced;
@@ -111,7 +112,7 @@ export default function Sidebar({ open, onClose }) {
                         return (
                           <>
                             {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-[#6C63FF]" />}
-                            <Icon size={16} className={active ? 'text-[#6C63FF]' : 'text-slate-400 group-hover:text-slate-600'} />
+                            {createElement(icon, { size: 16, className: active ? 'text-[#6C63FF]' : 'text-slate-400 group-hover:text-slate-600' })}
                             <span className="flex-1">{label}</span>
                             {active && <ChevronRight size={12} className="text-[#6C63FF]" />}
                           </>
@@ -130,13 +131,13 @@ export default function Sidebar({ open, onClose }) {
                 Menu
               </p>
               <div className="space-y-0.5">
-                {links.map(({ to, icon: Icon, label }) => {
+                {links.map(({ to, icon, label }) => {
                   const forced = isForceActive(to);
                   return (
                     <NavLink
                       key={to}
                       to={to}
-                      end={to === '/'}
+                      end={to === '/dashboard'}
                       onClick={onClose}
                       className={({ isActive }) => {
                         const active = isActive || forced;
@@ -153,7 +154,7 @@ export default function Sidebar({ open, onClose }) {
                         return (
                           <>
                             {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-[#6C63FF]" />}
-                            <Icon size={16} className={active ? 'text-[#6C63FF]' : 'text-slate-400 group-hover:text-slate-600'} />
+                            {createElement(icon, { size: 16, className: active ? 'text-[#6C63FF]' : 'text-slate-400 group-hover:text-slate-600' })}
                             <span className="flex-1">{label}</span>
                             {active && <ChevronRight size={12} className="text-[#6C63FF]" />}
                           </>
