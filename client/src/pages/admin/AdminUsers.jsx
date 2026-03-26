@@ -1,5 +1,5 @@
 // pages/admin/AdminUsers.jsx - Admin user management table
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Search, Trash2, CheckCircle, UserCheck, Edit2, X } from 'lucide-react';
 import api from '../../services/api';
 import Card from '../../components/ui/Card';
@@ -23,17 +23,17 @@ export default function AdminUsers() {
     const [editForm, setEditForm] = useState({ full_name: '', password: '' });
     const [savingEdit, setSavingEdit] = useState(false);
 
-    const load = () => {
+    const load = useCallback(() => {
         setLoading(true);
         api.get('/users', { params: { page, limit: 20, search, role: roleF } })
             .then((r) => { setUsers(r.data.users || []); setTotal(r.data.total || 0); })
             .catch(console.error)
             .finally(() => setLoading(false));
-    };
+    }, [page, search, roleF]);
 
     useEffect(() => {
         load();
-    }, [page, search, roleF]);
+    }, [load]);
 
     const act = async (fn) => {
         setActing(true);
@@ -99,8 +99,8 @@ export default function AdminUsers() {
         }
     };
     const remove = async (id) => {
-        const currentUser = JSON.parse(localStorage.getItem('idle_user'));
-        if (currentUser && currentUser.id === id) {
+        const currentStoredUser = JSON.parse(localStorage.getItem('idle_user'));
+        if (currentStoredUser && currentStoredUser.id === id) {
             notify.warning('You cannot delete your own account.');
             return;
         }
@@ -119,182 +119,161 @@ export default function AdminUsers() {
             <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 anim-fade-up">
                 <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
                     <div>
-                        <h1 className="text-xl font-bold">
-                            <span className="text-slate-900">Manage</span>{' '}
-                            <span className="text-blue-600">Users</span>
-                        </h1>
-                        <p className="text-sm text-slate-500 mt-1">{total} total users across the platform</p>
+                        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-indigo-400">Admin Users</p>
+                        <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900">Manage platform accounts</h1>
+                        <p className="mt-1 text-sm text-slate-500">Review, search, approve, and update user access.</p>
                     </div>
-
-                    <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                        <div className="relative w-full sm:w-72">
-                            <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input
-                                value={search}
-                                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                                placeholder="Search name or email..."
-                                className="w-full h-10 pl-11 pr-3.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                style={{ height: '42px' }}
-                            />
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Total Users</p>
+                            <p className="mt-1 text-xl font-black text-slate-900">{total}</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <Card className="anim-fade-up border-slate-200/70 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="relative w-full lg:max-w-sm">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            value={search}
+                            onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+                            placeholder="Search by name or email"
+                            className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                        />
+                    </div>
+                    <div className="flex items-center gap-3">
                         <select
                             value={roleF}
-                            onChange={(e) => { setRoleF(e.target.value); setPage(1); }}
-                            className="h-10 px-3.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                            style={{ height: '42px' }}
+                            onChange={(e) => { setPage(1); setRoleF(e.target.value); }}
+                            className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
                         >
-                            <option value="">All Roles</option>
+                            <option value="">All roles</option>
                             <option value="student">Student</option>
                             <option value="admin">Admin</option>
                         </select>
                     </div>
                 </div>
-            </div>
+            </Card>
 
-            <Card padding={false} className="overflow-hidden rounded-[14px] shadow-sm border-slate-200/60">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            {['S.No', 'User', 'Role', 'Status', 'Joined', 'Actions'].map((h) => <th key={h}>{h}</th>)}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading
-                            ? [1, 2, 3, 4, 5].map((i) => (
-                                <tr key={i}><td colSpan={6}><SkeletonRow /></td></tr>
-                            ))
-                            : users.map((u, index) => (
-                                <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                                    <td>
-                                        <span className="text-sm font-semibold text-slate-500">{(page - 1) * 20 + index + 1}</span>
+            <Card className="overflow-hidden border-slate-200/70 shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-100 text-sm">
+                        <thead className="bg-slate-50/70">
+                            <tr>
+                                <th className="px-5 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">User</th>
+                                <th className="px-5 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Role</th>
+                                <th className="px-5 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Status</th>
+                                <th className="px-5 py-3 text-right text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                            {loading ? (
+                                Array.from({ length: 8 }).map((_, idx) => <SkeletonRow key={idx} cols={4} />)
+                            ) : users.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-5 py-12 text-center text-sm text-slate-500">
+                                        No users found for the current filters.
                                     </td>
-                                    <td>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-xl gradient-brand flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                                {u.full_name?.[0]?.toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-[var(--text-primary)] text-sm">{u.full_name}</p>
-                                                <p className="text-xs text-[var(--text-muted)]">{u.email}</p>
-                                            </div>
+                                </tr>
+                            ) : users.map((user) => (
+                                <tr key={user.id} className="hover:bg-slate-50/70 transition-colors">
+                                    <td className="px-5 py-4">
+                                        <div>
+                                            <p className="font-semibold text-slate-900">{user.full_name || 'Unnamed user'}</p>
+                                            <p className="text-xs text-slate-500">{user.email}</p>
                                         </div>
                                     </td>
-                                    <td>
-                                        <select
-                                            value={u.role}
-                                            disabled={!!acting}
-                                            onChange={(e) => changeRole(u.id, e.target.value)}
-                                            className="text-xs font-semibold capitalize px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] cursor-pointer focus:outline-none"
-                                        >
-                                            <option value="student">student</option>
-                                            <option value="admin">admin</option>
-                                        </select>
+                                    <td className="px-5 py-4">
+                                        <Badge variant={user.role === 'admin' ? 'danger' : 'primary'} size="sm">{user.role}</Badge>
                                     </td>
-                                    <td>
-                                        {u.is_approved
-                                            ? <Badge variant="success"><CheckCircle size={11} /> Active</Badge>
-                                            : (
-                                                <button
-                                                    disabled={!!acting}
-                                                    onClick={() => approve(u.id)}
-                                                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    <UserCheck size={11} /> Approve
-                                                </button>
+                                    <td className="px-5 py-4">
+                                        <Badge variant={user.is_approved ? 'success' : 'warning'} size="sm">
+                                            {user.is_approved ? 'Approved' : 'Pending'}
+                                        </Badge>
+                                    </td>
+                                    <td className="px-5 py-4">
+                                        <div className="flex items-center justify-end gap-2">
+                                            {!user.is_approved && (
+                                                <Button type="button" size="sm" variant="secondary" disabled={acting} onClick={() => approve(user.id)}>
+                                                    <CheckCircle size={14} className="mr-1" /> Approve
+                                                </Button>
                                             )}
-                                    </td>
-                                    <td>
-                                        <span className="text-xs text-[var(--text-muted)]">
-                                            {new Date(u.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                disabled={!!acting}
-                                                onClick={() => openEdit(u)}
-                                                title="Edit user"
-                                                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            <Button type="button" size="sm" variant="outline" disabled={acting} onClick={() => openEdit(user)}>
+                                                <Edit2 size={14} className="mr-1" /> Edit
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                disabled={acting || currentUser?.id === user.id}
+                                                onClick={() => changeRole(user.id, user.role === 'admin' ? 'student' : 'admin')}
                                             >
-                                                <Edit2 size={14} />
-                                            </button>
-                                            <button
-                                                disabled={!!acting}
-                                                onClick={() => remove(u.id)}
-                                                title="Delete user"
-                                                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
+                                                <UserCheck size={14} className="mr-1" /> {user.role === 'admin' ? 'Make Student' : 'Make Admin'}
+                                            </Button>
+                                            <Button type="button" size="sm" variant="danger" disabled={acting} onClick={() => remove(user.id)}>
+                                                <Trash2 size={14} className="mr-1" /> Delete
+                                            </Button>
                                         </div>
                                     </td>
                                 </tr>
                             ))}
-                    </tbody>
-                </table>
-                {users.length === 0 && !loading && (
-                    <div className="text-center py-12 text-sm text-[var(--text-secondary)]">No users found</div>
-                )}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-sm text-slate-500">
+                    <span>Page {page}</span>
+                    <div className="flex items-center gap-2">
+                        <Button type="button" size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((prev) => prev - 1)}>
+                            Previous
+                        </Button>
+                        <Button type="button" size="sm" variant="secondary" disabled={users.length < 20} onClick={() => setPage((prev) => prev + 1)}>
+                            Next
+                        </Button>
+                    </div>
+                </div>
             </Card>
 
-            {!!editUser && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-                    onClick={(e) => e.target === e.currentTarget && closeEdit()}
-                >
-                    <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
-                        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+            {editUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+                        <div className="flex items-start justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-slate-900">Edit User</h2>
-                                <p className="mt-1 text-sm text-slate-500">{editUser.email}</p>
+                                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-400">Edit User</p>
+                                <h2 className="mt-2 text-xl font-black tracking-tight text-slate-900">Update account details</h2>
                             </div>
-                            <button
-                                onClick={() => closeEdit()}
-                                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
-                            >
-                                <X size={18} />
+                            <button type="button" onClick={() => closeEdit()} className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
+                                <X size={16} />
                             </button>
                         </div>
 
-                        <div className="space-y-4 px-6 py-6">
+                        <div className="mt-6 space-y-4">
                             <div>
-                                <label className="mb-2 block text-sm font-semibold text-slate-700">Full Name</label>
+                                <label className="mb-2 block text-sm font-semibold text-slate-700">Full name</label>
                                 <input
                                     value={editForm.full_name}
                                     onChange={(e) => setEditForm((prev) => ({ ...prev, full_name: e.target.value }))}
-                                    placeholder="Enter full name"
-                                    className="w-full h-11 px-4 text-sm rounded-xl border border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                    className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
                                 />
                             </div>
-
                             <div>
-                                <label className="mb-2 block text-sm font-semibold text-slate-700">New Password</label>
+                                <label className="mb-2 block text-sm font-semibold text-slate-700">New password</label>
                                 <input
                                     type="password"
                                     value={editForm.password}
                                     onChange={(e) => setEditForm((prev) => ({ ...prev, password: e.target.value }))}
                                     placeholder="Leave blank to keep current password"
-                                    className="w-full h-11 px-4 text-sm rounded-xl border border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                    className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
                                 />
-                                <p className="mt-2 text-xs text-slate-500">Use at least 8 characters only if you want to reset the password.</p>
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
-                            <Button
-                                variant="ghost"
-                                onClick={() => closeEdit()}
-                                disabled={savingEdit}
-                                className="h-10 px-5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={saveEdit}
-                                loading={savingEdit}
-                                className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 border-blue-600 hover:border-blue-500"
-                            >
-                                Save Changes
+                        <div className="mt-6 flex items-center justify-end gap-3">
+                            <Button type="button" variant="secondary" onClick={() => closeEdit()} disabled={savingEdit}>Cancel</Button>
+                            <Button type="button" onClick={saveEdit} disabled={savingEdit}>
+                                {savingEdit ? 'Saving...' : 'Save changes'}
                             </Button>
                         </div>
                     </div>

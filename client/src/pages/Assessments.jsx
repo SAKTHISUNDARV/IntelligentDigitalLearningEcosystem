@@ -174,7 +174,7 @@ export default function Assessments() {
                   className="w-full bg-blue-600 hover:bg-blue-700"
                   onClick={() => startQuiz(quiz)}
                 >
-                  {quiz.unlocked ? 'Start Quiz' : 'Continue Learning'}
+                  {quiz.unlocked ? (quiz.has_attempts ? 'Retake Quiz' : 'Start Quiz') : 'Continue Learning'}
                 </Button>
               </div>
             </Card>

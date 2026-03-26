@@ -5,32 +5,32 @@ const variants = {
     Icon: Info,
     role: 'status',
     live: 'polite',
-    shell: 'border-sky-200/90 bg-[linear-gradient(135deg,#f7fbff_0%,#eef6ff_100%)] text-slate-800 shadow-[8px_8px_20px_rgba(148,163,184,0.14),-6px_-6px_18px_rgba(255,255,255,0.95)]',
-    iconWrap: 'bg-[linear-gradient(180deg,#4f8df9_0%,#2f6be0_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_18px_rgba(47,107,224,0.22)]',
+    shell: 'border-sky-200/90 bg-[linear-gradient(135deg,#f7fbff_0%,#eef6ff_100%)] text-slate-800 shadow-sm',
+    iconWrap: 'bg-[linear-gradient(180deg,#4f8df9_0%,#2f6be0_100%)] text-white shadow-sm',
     close: 'text-sky-600/70 hover:bg-sky-100 hover:text-sky-800 focus-visible:ring-sky-300',
   },
   success: {
     Icon: CheckCircle2,
     role: 'status',
     live: 'polite',
-    shell: 'border-emerald-200/90 bg-[linear-gradient(135deg,#f4fcf6_0%,#eef9f1_100%)] text-slate-800 shadow-[8px_8px_20px_rgba(148,163,184,0.14),-6px_-6px_18px_rgba(255,255,255,0.95)]',
-    iconWrap: 'bg-[linear-gradient(180deg,#58c86c_0%,#37ad50_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_18px_rgba(55,173,80,0.24)]',
+    shell: 'border-emerald-200/90 bg-[linear-gradient(135deg,#f4fcf6_0%,#eef9f1_100%)] text-slate-800 shadow-sm',
+    iconWrap: 'bg-[linear-gradient(180deg,#58c86c_0%,#37ad50_100%)] text-white shadow-sm',
     close: 'text-emerald-600/70 hover:bg-emerald-100 hover:text-emerald-800 focus-visible:ring-emerald-300',
   },
   warning: {
     Icon: AlertTriangle,
     role: 'alert',
     live: 'assertive',
-    shell: 'border-amber-200/90 bg-[linear-gradient(135deg,#fffbf2_0%,#fff5e8_100%)] text-slate-800 shadow-[8px_8px_20px_rgba(148,163,184,0.14),-6px_-6px_18px_rgba(255,255,255,0.95)]',
-    iconWrap: 'bg-[linear-gradient(180deg,#f2b451_0%,#df9526_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_18px_rgba(223,149,38,0.24)]',
+    shell: 'border-amber-200/90 bg-[linear-gradient(135deg,#fffbf2_0%,#fff5e8_100%)] text-slate-800 shadow-sm',
+    iconWrap: 'bg-[linear-gradient(180deg,#f2b451_0%,#df9526_100%)] text-white shadow-sm',
     close: 'text-amber-600/70 hover:bg-amber-100 hover:text-amber-800 focus-visible:ring-amber-300',
   },
   error: {
     Icon: AlertCircle,
     role: 'alert',
     live: 'assertive',
-    shell: 'border-rose-200/90 bg-[linear-gradient(135deg,#fff7f6_0%,#fff0ee_100%)] text-slate-800 shadow-[8px_8px_20px_rgba(148,163,184,0.14),-6px_-6px_18px_rgba(255,255,255,0.95)]',
-    iconWrap: 'bg-[linear-gradient(180deg,#f26d5f_0%,#e45446_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_18px_rgba(228,84,70,0.24)]',
+    shell: 'border-rose-200/90 bg-[linear-gradient(135deg,#fff7f6_0%,#fff0ee_100%)] text-slate-800 shadow-sm',
+    iconWrap: 'bg-[linear-gradient(180deg,#f26d5f_0%,#e45446_100%)] text-white shadow-sm',
     close: 'text-rose-600/70 hover:bg-rose-100 hover:text-rose-800 focus-visible:ring-rose-300',
   },
 };
@@ -83,7 +83,7 @@ export function AlertShowcase() {
       <Alert type="info" title="System update" message="New analytics data is ready to review." />
       <Alert type="success" title="Changes saved" message="Your course settings were updated successfully." />
       <Alert type="warning" title="Storage almost full" message="You are nearing the upload limit for this workspace." />
-      <Alert type="error" title="Action failed" message="We couldn’t publish the course. Please try again." />
+      <Alert type="error" title="Action failed" message="We couldn't publish the course. Please try again." />
     </div>
   );
 }

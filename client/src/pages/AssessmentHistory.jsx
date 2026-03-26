@@ -35,14 +35,6 @@ const formatAttemptDate = (dateValue) => {
   });
 };
 
-const formatDuration = (seconds) => {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '-';
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (mins === 0) return `${secs}s`;
-  return `${mins}m ${secs}s`;
-};
-
 export default function AssessmentHistory() {
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
@@ -88,8 +80,11 @@ export default function AssessmentHistory() {
     const total = normalizedHistory.length;
     const passed = normalizedHistory.filter((h) => h.isPassed).length;
     const failed = total - passed;
-    const avg = total ? Math.round(normalizedHistory.reduce((sum, h) => sum + h.score, 0) / total) : 0;
-    return { total, passed, failed, avg };
+    const avg = total
+      ? normalizedHistory.reduce((sum, h) => sum + h.score, 0) / total
+      : 0;
+    const avgDisplay = Number.isInteger(avg) ? `${avg}%` : `${avg.toFixed(1)}%`;
+    return { total, passed, failed, avgDisplay };
   }, [normalizedHistory]);
 
   const handleReviewAnswers = (attempt) => {
@@ -152,7 +147,7 @@ export default function AssessmentHistory() {
                 </div>
                 <div className="px-5 py-4 rounded-xl bg-amber-50/50 border border-amber-100 min-w-[140px] transition-all hover:shadow-sm">
                   <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Avg Score</p>
-                  <p className="text-xl font-bold text-amber-700 mt-1 leading-none">{summary.avg}%</p>
+                  <p className="text-xl font-bold text-amber-700 mt-1 leading-none">{summary.avgDisplay}</p>
                 </div>
               </>
             )}
@@ -193,7 +188,7 @@ export default function AssessmentHistory() {
               {loading
                 ? [1, 2, 3, 4].map(i => <tr key={i}><td colSpan={7}><SkeletonRow /></td></tr>)
                 : sortedHistory.map((h, i) => (
-                  <tr key={h.id}>
+                  <tr key={h.id} className="group">
                     <td className="text-xs font-bold text-slate-400">{i + 1}</td>
                     <td>
                       <p className="text-sm font-semibold text-[var(--text-primary)] truncate max-w-[200px]">{h.quiz_title || 'Untitled Quiz'}</p>
@@ -228,11 +223,16 @@ export default function AssessmentHistory() {
                       </span>
                     </td>
                     <td>
-                      <div className="flex items-center gap-2 flex-wrap min-w-[240px]">
+                      <div className="flex min-w-[240px] items-center gap-2 flex-wrap">
                         <Button size="sm" variant="ghost" className="!text-slate-700 hover:!bg-slate-100" onClick={() => handleReviewAnswers(h)}>
                           <ClipboardCheck size={14} /> Review Answers
                         </Button>
-                        <Button size="sm" variant="ghost" className="!text-red-600 hover:!bg-red-50" onClick={() => handleDeleteAttempt(h.id)}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="!text-red-600 hover:!bg-red-50 transition-opacity duration-200 md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto"
+                          onClick={() => handleDeleteAttempt(h.id)}
+                        >
                           <XCircle size={14} /> Delete
                         </Button>
                       </div>

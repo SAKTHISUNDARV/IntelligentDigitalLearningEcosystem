@@ -27,7 +27,7 @@ const isCompleted = (course) => Boolean(course.completed) || getProgress(course)
 import confirmAction from '../utils/confirm';
 import notify from '../utils/notify';
 
-function CourseCard({ course, navigate, onUnenroll }) {
+function CourseCard({ course, navigate }) {
   const pct = getProgress(course);
   const completed = isCompleted(course);
   const gradient = levelColor[course.level] || 'from-indigo-500 to-violet-600';
@@ -254,3 +254,4 @@ export default function MyCourses() {
     </div>
   );
 }
+

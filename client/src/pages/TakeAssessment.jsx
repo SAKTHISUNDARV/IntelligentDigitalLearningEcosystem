@@ -1,11 +1,7 @@
 // pages/TakeAssessment.jsx — Professional, Immersive Assessment Interface
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import {
-    Timer, ArrowLeft, ChevronRight, ChevronLeft, Send, AlertTriangle, Sparkles,
-    Bookmark, Flag, Info, LayoutDashboard, HelpCircle, Eye, EyeOff, Trash2,
-    Trophy, XCircle, CheckCircle
-} from 'lucide-react';
+import { ChevronRight, AlertTriangle, Sparkles, Bookmark, CheckCircle } from 'lucide-react';
 import api from '../services/api';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -63,7 +59,7 @@ export default function TakeAssessment() {
                 if (saved) {
                     try {
                         setAnswers(JSON.parse(saved));
-                    } catch (e) {
+                    } catch {
                         console.error('[TakeAssessment] Failed to parse saved answers');
                     }
                 }
@@ -91,7 +87,7 @@ export default function TakeAssessment() {
         }, 1000);
 
         return () => clearInterval(timerRef.current);
-    }, [quiz, loading]);
+    }, [quiz, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Track visited questions
     useEffect(() => {
@@ -165,9 +161,6 @@ export default function TakeAssessment() {
         }
     };
 
-    const handleExit = () => {
-        setShowExitConfirm(true);
-    };
 
     const toggleBookmark = (idx) => {
         setBookmarks(prev => ({
@@ -215,7 +208,6 @@ export default function TakeAssessment() {
     const answeredCount = Object.keys(answers).length;
     const bookmarkedCount = Object.values(bookmarks).filter(Boolean).length;
     const visitedCount = visited.size;
-    const notVisitedCount = totalQuestions - visitedCount;
     const notAnsweredCount = visitedCount - answeredCount;
 
     return (
@@ -536,3 +528,6 @@ export default function TakeAssessment() {
         </div>
     );
 }
+
+
+

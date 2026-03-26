@@ -154,6 +154,68 @@ async function getCourseEnrollmentProgress(userId, courseId) {
     return Number(rows[0]?.progress || 0);
 }
 
+async function recalculateEnrollmentProgress(userId, courseId) {
+    const [[totals]] = await pool.query(`
+        SELECT
+            (SELECT COUNT(*)
+             FROM lessons l
+             JOIN modules m ON m.id = l.module_id
+             WHERE m.course_id = $1) AS total_lessons,
+            (SELECT COUNT(*)
+             FROM quizzes
+             WHERE course_id = $1) AS total_quizzes
+    `, [courseId]);
+
+    const [[completedLessonsRow]] = await pool.query(`
+        SELECT COUNT(*) AS completed_lessons
+        FROM lesson_progress lp
+        JOIN lessons l ON l.id = lp.lesson_id
+        JOIN modules m ON m.id = l.module_id
+        WHERE lp.user_id = $1
+          AND m.course_id = $2
+          AND lp.completed = TRUE
+    `, [userId, courseId]);
+
+    const [bestAttempts] = await pool.query(`
+        SELECT
+            q.id AS quiz_id,
+            q.pass_score,
+            MAX(a.score) AS best_score
+        FROM quizzes q
+        LEFT JOIN assessments a
+          ON a.quiz_id = q.id
+         AND a.user_id = $1
+        WHERE q.course_id = $2
+        GROUP BY q.id, q.pass_score
+    `, [userId, courseId]);
+
+    const totalLessons = Number(totals?.total_lessons || 0);
+    const totalQuizzes = Number(totals?.total_quizzes || 0);
+    const completedLessons = Number(completedLessonsRow?.completed_lessons || 0);
+    const passedQuizzes = bestAttempts.filter((quiz) => Number(quiz.best_score || 0) >= Number(quiz.pass_score || DEFAULT_PASS_SCORE)).length;
+    const totalItems = totalLessons + totalQuizzes;
+    const completedItems = completedLessons + passedQuizzes;
+    const progressPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+    const isCompleted = totalItems > 0 && progressPct >= 100;
+
+    await pool.query(`
+        UPDATE enrollments
+        SET progress = $1,
+            completed = $2,
+            completed_at = CASE
+                WHEN $2 THEN COALESCE(completed_at, NOW())
+                ELSE NULL
+            END
+        WHERE student_id = $3 AND course_id = $4
+    `, [progressPct, isCompleted, userId, courseId]);
+
+    return {
+        progress: progressPct,
+        course_completed: isCompleted,
+        passed_quizzes: passedQuizzes,
+    };
+}
+
 async function getQuizAccessState(userId, quizRow) {
     if (!quizRow) {
         return { unlocked: false, reason: 'Quiz not found' };
@@ -206,20 +268,29 @@ router.get('/available', authenticateToken, requireRole('student'), async (req, 
         const [rows] = await pool.query(`SELECT q.id, q.module_id, q.title, q.description, q.time_limit, q.pass_score,
                     CASE WHEN q.module_id IS NULL THEN 'final' ELSE 'module' END AS quiz_type,
                     c.title AS course_title, c.id AS course_id,
-                    m.title AS module_title
+                    m.title AS module_title,
+                    COUNT(a.id) AS attempt_count,
+                    MAX(a.score) AS best_score
              FROM quizzes q
              JOIN courses c ON c.id = q.course_id
              JOIN enrollments e ON e.course_id = q.course_id
+             LEFT JOIN assessments a ON a.quiz_id = q.id AND a.user_id = $1
              LEFT JOIN modules m ON m.id = q.module_id
              WHERE e.student_id = $1
+             GROUP BY q.id, c.title, c.id, m.title, e.enrolled_at
              ORDER BY e.enrolled_at DESC, q.id ASC`,
             [userId]
         );
 
         const quizzes = await Promise.all(rows.map(async (quiz) => {
             const access = await getQuizAccessState(userId, quiz);
+            const bestScore = Number(quiz.best_score || 0);
             return {
                 ...quiz,
+                attempt_count: Number(quiz.attempt_count || 0),
+                best_score: bestScore,
+                has_attempts: Number(quiz.attempt_count || 0) > 0,
+                best_passed: bestScore >= Number(quiz.pass_score || DEFAULT_PASS_SCORE),
                 unlocked: access.unlocked,
                 progress_percent: access.percent ?? 0,
                 required_percent: access.threshold ?? MODULE_QUIZ_UNLOCK_PERCENT,
@@ -430,7 +501,12 @@ router.delete('/assessment/:id', authenticateToken, async (req, res) => {
     const assessmentId = parseInt(req.params.id, 10);
     if (isNaN(assessmentId)) return res.status(400).json({ error: 'Invalid assessment ID' });
     try {
-        const [assessment] = await pool.query('SELECT user_id FROM assessments WHERE id = $1', [assessmentId]);
+        const [assessment] = await pool.query(`
+            SELECT a.user_id, q.course_id
+            FROM assessments a
+            JOIN quizzes q ON q.id = a.quiz_id
+            WHERE a.id = $1
+        `, [assessmentId]);
         if (!assessment.length) return res.status(404).json({ error: 'Assessment not found' });
 
         // Ownership check: Students can only delete their own, Admins can delete any
@@ -439,7 +515,11 @@ router.delete('/assessment/:id', authenticateToken, async (req, res) => {
         }
 
         await pool.query('DELETE FROM assessments WHERE id = $1', [assessmentId]);
-        res.json({ message: 'Assessment attempt deleted successfully' });
+        const updated = await recalculateEnrollmentProgress(
+            parseInt(assessment[0].user_id, 10),
+            parseInt(assessment[0].course_id, 10)
+        );
+        res.json({ message: 'Assessment attempt deleted successfully', ...updated });
     } catch (err) {
         console.error('[DELETE /quizzes/assessment/:id]', err);
         res.status(500).json({ error: 'Server error' });
@@ -758,17 +838,8 @@ router.post('/:id/submit', authenticateToken, requireRole('student'), async (req
             [quizId, userId, score, JSON.stringify(answers), passed, time_taken || 0]
         );
 
-        // Mark course complete only after passing the final quiz with course progress at least 80%.
         const courseId = quiz[0].course_id;
-        const enrollmentProgress = await getCourseEnrollmentProgress(userId, courseId);
-
-        let completed = false;
-        if ((quiz[0].quiz_type === 'final' || quiz[0].module_id === null) && enrollmentProgress >= FINAL_QUIZ_UNLOCK_PERCENT && passed) {
-            completed = true;
-            await pool.query('UPDATE enrollments SET completed = TRUE, completed_at = NOW() WHERE student_id = $1 AND course_id = $2 AND completed = FALSE',
-                [userId, courseId]
-            );
-        }
+        const updated = await recalculateEnrollmentProgress(userId, courseId);
 
         res.json({
             assessment_id: result[0]?.id,
@@ -777,7 +848,8 @@ router.post('/:id/submit', authenticateToken, requireRole('student'), async (req
             correct,
             total: questions.length,
             feedback,
-            course_completed: completed
+            course_completed: updated.course_completed,
+            progress: updated.progress
         });
     } catch (err) {
         const errorData = {

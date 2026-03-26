@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   User, Mail, Save, Pencil, X, Calendar, CheckCircle,
-  BookOpen, Shield, Activity, Clock
+  Shield, Clock
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -41,12 +41,6 @@ const formatDateTime = (dateValue) => {
   });
 };
 
-const activityIcon = {
-  enrollment: BookOpen,
-  assessment: CheckCircle,
-  task: Activity,
-};
-
 export default function Profile() {
   const { user, updateUser } = useAuth();
   const [stats, setStats] = useState(null);
@@ -71,33 +65,49 @@ export default function Profile() {
       Promise.all([
         api.get('/analytics/student').then((r) => setStats(r.data)).catch(() => {}),
         api.get('/courses/student/enrolled').then((r) => setEnrolledCourses(Array.isArray(r.data) ? r.data : [])).catch(() => {}),
-        api.post('/recommendations', {}).catch(() => { })
       ]).finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
   }, [user]);
-
-  const recentActivity = useMemo(() => stats?.recent_activity || [], [stats]);
   const recentCompletedCourses = useMemo(() => {
+    const analyticsCompleted = Array.isArray(stats?.completed_courses) ? stats.completed_courses : [];
+    if (analyticsCompleted.length) {
+      return analyticsCompleted
+        .slice(0, 5)
+        .map((course) => ({
+          title: course.title,
+          timestamp: course.completed_at || course.updated_at,
+        }));
+    }
+
     return enrolledCourses
-      .filter(course => Boolean(course.completed) || Number(course.progress || 0) >= 100)
+      .filter((course) =>
+        Boolean(course.completed)
+        || Number(course.progress || 0) >= 100
+        || (
+          Number(course.total_lessons || 0) > 0
+          && Number(course.completed_lessons || 0) >= Number(course.total_lessons || 0)
+        )
+        || Boolean(course.completed_at)
+      )
       .sort((a, b) => {
         const aTime = new Date(a.completed_at || a.updated_at || a.enrolled_at || 0).getTime();
         const bTime = new Date(b.completed_at || b.updated_at || b.enrolled_at || 0).getTime();
         return bTime - aTime;
       })
-      .slice(0, 3)
-      .map(course => ({
+      .slice(0, 5)
+      .map((course) => ({
         title: course.title,
-        timestamp: course.completed_at || course.updated_at || course.enrolled_at
+        timestamp: course.completed_at || course.updated_at || course.enrolled_at,
       }));
-  }, [enrolledCourses]);
+  }, [stats, enrolledCourses]);
 
-  const lastActive = useMemo(() => {
-    const latest = recentActivity[0]?.timestamp;
-    return latest ? formatDateTime(latest) : 'No data';
-  }, [recentActivity]);
+  const lastLogin = useMemo(() => {
+    const recentActivityFallback = stats?.recent_activity?.[0]?.created_at || stats?.recent_activity?.[0]?.timestamp;
+    const value = user?.last_login || recentActivityFallback;
+    return value ? formatDateTime(value) : 'No data';
+  }, [user, stats]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -203,7 +213,7 @@ export default function Profile() {
                   { icon: Mail, label: 'Email', value: user?.email || '-' },
                   { icon: Shield, label: 'Account Type', value: rm.label },
                   { icon: Calendar, label: 'Joined Date', value: joinedDate },
-                  { icon: Clock, label: 'Last Login', value: lastActive },
+                  { icon: Clock, label: 'Last Login', value: lastLogin },
                   { icon: CheckCircle, label: 'Account Status', value: 'Active' },
                 ].map((field) => (
                   <div key={field.label} className={infoCardUi}>
@@ -219,48 +229,25 @@ export default function Profile() {
 
             <div className="space-y-4">
               <Card className={`${cardUi} p-5`}>
-                <h3 className="text-base font-semibold text-[#111827] mb-3">Recent Activity</h3>
-                {recentCompletedCourses.length > 0 && (
-                  <div className="mb-3 space-y-2">
-                    <p className="text-[12px] tracking-[0.05em] uppercase text-[#6B7280]">Last Completed Courses</p>
-                    {recentCompletedCourses.map((course, idx) => (
-                      <div key={`${course.title}-${idx}`} className={infoCardUi}>
-                        <div className="flex items-start gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center mt-0.5">
-                            <CheckCircle size={14} className="text-emerald-600" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[#111827]">{course.title}</p>
-                            <p className="text-xs text-[#6B7280] mt-0.5">{formatDateTime(course.timestamp)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <h3 className="text-base font-semibold text-[#111827] mb-3">Completed Courses</h3>
                 <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
-                  {recentActivity.length > 0 ? recentActivity.slice(0, 8).map((item, idx) => {
-                    const Icon = activityIcon[item.type] || Activity;
-                    return (
-                      <div key={`${item.type}-${idx}`} className={infoCardUi}>
-                        <div className="flex items-start gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center mt-0.5">
-                            <Icon size={14} className="text-[#6C63FF]" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[#111827]">{item.description}</p>
-                            <p className="text-xs text-[#6B7280] mt-0.5 break-words">
-                              {item.reference} - {formatDateTime(item.timestamp)}
-                            </p>
-                          </div>
+                  {recentCompletedCourses.length > 0 ? recentCompletedCourses.map((course, idx) => (
+                    <div key={`${course.title}-${idx}`} className={infoCardUi}>
+                      <div className="flex items-start gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center mt-0.5">
+                          <CheckCircle size={14} className="text-emerald-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[#111827]">{course.title}</p>
+                          <p className="text-xs text-[#6B7280] mt-0.5">Completed {formatDateTime(course.timestamp)}</p>
                         </div>
                       </div>
-                    );
-                  }) : recentCompletedCourses.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
-                      No recent activity yet. Start learning to track your progress.
                     </div>
-                  ) : null}
+                  )) : (
+                    <div className="rounded-xl border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
+                      No completed courses yet. Finish a course to see it here.
+                    </div>
+                  )}
                 </div>
               </Card>
             </div>

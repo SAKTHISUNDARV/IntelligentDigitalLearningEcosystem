@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ClipboardList, Plus, Trash2, CheckCircle2,
   Clock, Calendar, Edit2, Loader2, ListTodo, Search
@@ -32,7 +32,6 @@ export default function ManageTasks() {
   });
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const now = new Date();
 
   const fetchTasks = async () => {
     try {
@@ -127,23 +126,14 @@ export default function ManageTasks() {
     }
   };
 
-  const isOverdue = (task) => {
-    if (!task.due_date || task.status === 'completed') return false;
-    return new Date(task.due_date) < now;
-  };
 
   const completedCount = tasks.filter((t) => t.status === 'completed').length;
   const pendingCount = tasks.length - completedCount;
 
-  const completionPercent = tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0;
-  const pendingPercent = tasks.length ? Math.round((pendingCount / tasks.length) * 100) : 0;
-
-  const priorityColors = {
-    low: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    medium: 'bg-amber-50 text-amber-700 border-amber-100',
-    high: 'bg-red-50 text-red-700 border-red-100',
-  };
-
+  const isOverdue = useCallback((task) => {
+    if (!task.due_date || task.status === 'completed') return false;
+    return new Date(task.due_date) < new Date();
+  }, []);
   const filteredTasks = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return tasks.filter((task) => {
@@ -157,7 +147,7 @@ export default function ManageTasks() {
       if (activeTab === 'overdue') return isOverdue(task);
       return true;
     });
-  }, [tasks, search, activeTab]);
+  }, [tasks, search, activeTab, isOverdue]);
 
   return (
     <div className="max-w-[1200px] mx-auto w-full space-y-2 min-h-screen" >
@@ -461,3 +451,5 @@ export default function ManageTasks() {
     </div>
   );
 }
+
+

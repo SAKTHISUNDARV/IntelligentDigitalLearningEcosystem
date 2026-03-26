@@ -10,7 +10,7 @@ import api from '../services/api';
 import Card, { CardHeader, CardTitle } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
-import { Skeleton, SkeletonStat } from '../components/ui/Skeleton';
+import { SkeletonStat } from '../components/ui/Skeleton';
 
 /* Student Dashboard */
 function StudentDashboard({ user }) {
@@ -39,12 +39,17 @@ function StudentDashboard({ user }) {
     };
   }, []);
 
-  const enrolledCount = stats?.enrolled_count ?? courses.length;
-  const lessonsCompleted = stats?.lessons_completed ?? 0;
-  const avgQuizScore = stats?.avg_quiz_score ?? 0;
-  const completedCount =
+  const enrolledCount = Number(stats?.enrolled_count ?? courses.length ?? 0);
+  const derivedLessonsCompleted = courses.reduce((sum, course) => sum + Number(course.completed_lessons || 0), 0);
+  const lessonsCompleted = Number(stats?.lessons_completed ?? derivedLessonsCompleted ?? 0);
+  const avgQuizScore = Number(stats?.avg_quiz_score ?? 0);
+  const avgQuizScoreDisplay = Number.isInteger(avgQuizScore)
+    ? `${avgQuizScore}%`
+    : `${avgQuizScore.toFixed(1)}%`;
+  const completedCount = Number(
     stats?.completed_count ??
-    courses.filter((course) => course.completed || Number(course.progress || 0) >= 100).length;
+    courses.filter((course) => course.completed || Number(course.progress || 0) >= 100).length
+  );
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Not available';
@@ -62,12 +67,28 @@ function StudentDashboard({ user }) {
 
   const lastLoginTime = user?.last_login;
 
-  const continueCourse = useMemo(() => {
+  const continueCourses = useMemo(() => {
     if (!courses.length) return null;
-    return [...courses].sort((a, b) => Number(b.progress || 0) - Number(a.progress || 0))[0];
+
+    const inProgressCourses = courses.filter((course) => !course.completed && Number(course.progress || 0) < 100);
+    if (!inProgressCourses.length) return null;
+
+    return [...inProgressCourses].sort((a, b) => {
+      const progressDiff = Number(b.progress || 0) - Number(a.progress || 0);
+      if (progressDiff !== 0) return progressDiff;
+
+      const aUpdated = new Date(a.updated_at || a.enrolled_at || 0).getTime();
+      const bUpdated = new Date(b.updated_at || b.enrolled_at || 0).getTime();
+      return bUpdated - aUpdated;
+    }).slice(0, 2);
   }, [courses]);
 
-  const overallProgress = Number(stats?.avg_progress ?? 0);
+  const overallProgress = Math.round(Number(
+    stats?.avg_progress ??
+    (courses.length
+      ? courses.reduce((sum, course) => sum + Number(course.progress || 0), 0) / courses.length
+      : 0)
+  ));
 
   const getLessonsRemaining = (course) => {
     if (!course) return null;
@@ -77,18 +98,21 @@ function StudentDashboard({ user }) {
     return Math.max(0, total - completed);
   };
 
-  const totalLessons = continueCourse
-    ? Number(continueCourse.total_lessons ?? continueCourse.lessons_count ?? 0)
-    : 0;
-  const completedLessonsInCourse =
-    continueCourse && totalLessons
-      ? Math.max(0, totalLessons - (getLessonsRemaining(continueCourse) ?? 0))
-      : 0;
-  const estimatedHoursRemaining =
-    continueCourse && totalLessons
-      ? Math.max(1, Math.ceil(((getLessonsRemaining(continueCourse) ?? 0) * 8) / 60))
-      : null;
-  const continueProgress = Math.round(Number(continueCourse?.progress || overallProgress || 0));
+  const getCourseProgress = (course) => Math.round(Number(course?.progress || overallProgress || 0));
+  const getCourseLessonSummary = (course) => {
+    const totalLessons = Number(course?.total_lessons ?? course?.lessons_count ?? 0);
+    const remainingLessons = getLessonsRemaining(course);
+    const completedLessonsInCourse =
+      course && totalLessons
+        ? Math.max(0, totalLessons - (remainingLessons ?? 0))
+        : 0;
+    const estimatedHoursRemaining =
+      course && totalLessons
+        ? Math.max(1, Math.ceil(((remainingLessons ?? 0) * 8) / 60))
+        : null;
+
+    return { totalLessons, completedLessonsInCourse, remainingLessons, estimatedHoursRemaining };
+  };
 
   const metricCards = [
     {
@@ -109,7 +133,7 @@ function StudentDashboard({ user }) {
     },
     {
       label: 'Average Score',
-      value: `${avgQuizScore}%`,
+      value: avgQuizScoreDisplay,
       icon: Award,
       gradient: 'from-amber-50 to-amber-100',
       iconBg: 'bg-amber-500/10',
@@ -128,38 +152,37 @@ function StudentDashboard({ user }) {
   const allActivityItems = Array.isArray(stats?.recent_activity) ? stats.recent_activity : [];
   const activityItems = showAllActivities ? allActivityItems : allActivityItems.slice(0, 5);
   const skills = Array.isArray(stats?.skills_progress) ? stats.skills_progress : [];
-  const skillSkeletonItems = [1, 2, 3];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10 pb-12">
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 anim-fade-up">
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+    <div className="mx-auto max-w-7xl space-y-5 pb-6">
+      <div className="anim-fade-up rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
               Welcome back, <span className="text-blue-600">{user?.full_name?.split(' ')[0]}</span>
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="mt-1 text-sm text-slate-500">
               Continue your learning journey today.
             </p>
           </div>
 
-          <div className="px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 min-w-[220px]">
+          <div className="min-w-[220px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Login</p>
             <p className="text-sm font-semibold text-slate-700 mt-1">{formatDate(lastLoginTime)}</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {loading ? [1, 2, 3, 4].map((index) => <SkeletonStat key={index} />) : metricCards.map((card) => {
           const Icon = card.icon;
           return (
             <div
               key={card.label}
-              className={`rounded-[14px] border border-slate-200/60 bg-gradient-to-br ${card.gradient} p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md`}
+              className={`rounded-[14px] border border-slate-200/60 bg-gradient-to-br ${card.gradient} p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md`}
             >
-              <div className="flex items-center gap-3">
-                <div className={`h-12 w-12 rounded-2xl ${card.iconBg} flex items-center justify-center`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${card.iconBg}`}>
                   <Icon size={20} className={card.iconColor} />
                 </div>
                 <div>
@@ -172,80 +195,96 @@ function StudentDashboard({ user }) {
         })}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] gap-5 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] gap-4 xl:items-stretch">
         <div>
-          <Card className="anim-fade-up border-slate-200/60 shadow-sm bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_100%)] overflow-hidden">
+          <Card className="anim-fade-up h-full border-slate-200/60 shadow-sm bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_100%)] overflow-hidden">
             {loading ? (
-              <div className="p-4 space-y-3">
+              <div className="space-y-3 p-4">
                 <SkeletonStat />
                 <SkeletonStat />
               </div>
-            ) : continueCourse ? (
-              <div className="p-5">
-                <div className="flex items-start justify-between gap-4">
+            ) : continueCourses?.length ? (
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.24em]">Continue Learning</p>
-                    <p className="mt-1 text-sm text-slate-600">A focused snapshot of your current course.</p>
-                  </div>
-                  <div className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                    {continueProgress}% done
+                    <p className="mt-1 text-sm text-slate-600">Pick up where you left off in your top active courses.</p>
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className="h-18 w-28 rounded-2xl overflow-hidden bg-slate-100 shadow-sm ring-1 ring-slate-200/70 flex-shrink-0">
-                    {continueCourse.thumbnail_url ? (
-                      <img src={continueCourse.thumbnail_url} alt={continueCourse.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-400 text-white">
-                        <GraduationCap size={22} />
+                <div className="mt-3 space-y-2.5">
+                  {continueCourses.map((course) => {
+                    const courseProgress = getCourseProgress(course);
+                    const {
+                      totalLessons,
+                      completedLessonsInCourse,
+                      remainingLessons,
+                      estimatedHoursRemaining,
+                    } = getCourseLessonSummary(course);
+
+                    return (
+                      <div key={course.id} className="rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                          <div className="h-15 w-22 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200/70">
+                            {course.thumbnail_url ? (
+                              <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-400 text-white">
+                                <GraduationCap size={22} />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="line-clamp-2 text-lg font-bold leading-tight tracking-tight text-slate-900">{course.title}</p>
+                              
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Module: <span className="font-semibold text-slate-700">{course.current_module || 'In Progress'}</span>
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                                Remaining {remainingLessons ?? '-'}
+                              </span>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                                ETA {estimatedHoursRemaining ? `${estimatedHoursRemaining}h` : '-'}
+                              </span>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                                {totalLessons ? `${completedLessonsInCourse}/${totalLessons} lessons` : `${lessonsCompleted} lessons`}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="sm:flex sm:self-stretch sm:items-end">
+                            <Button
+                              size="sm"
+                              className="min-w-[108px] w-full border-slate-900 bg-slate-900 shadow-none hover:border-slate-800 hover:bg-slate-800 sm:w-auto"
+                              onClick={() => navigate(`/learn/${course.id}`)}
+                            >
+                              <Play size={14} className="mr-1.5" /> Resume
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="mt-2.5">
+                          <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="font-semibold uppercase tracking-[0.18em] text-slate-400">Progress</span>
+                            <span className="font-bold text-slate-700">{courseProgress}%</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 transition-all duration-700"
+                              style={{ width: `${courseProgress}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-lg font-bold tracking-tight text-slate-900 line-clamp-2">{continueCourse.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Module: <span className="font-semibold text-slate-700">{continueCourse.current_module || 'In Progress'}</span>
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-                        Remaining {getLessonsRemaining(continueCourse) ?? '-'}
-                      </span>
-                      <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-                        ETA {estimatedHoursRemaining ? `${estimatedHoursRemaining}h` : '-'}
-                      </span>
-                      <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-                        {totalLessons ? `${completedLessonsInCourse}/${totalLessons} lessons` : `${lessonsCompleted} lessons`}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="sm:self-stretch sm:flex sm:items-end">
-                    <Button
-                      size="sm"
-                      className="w-full sm:w-auto min-w-[112px] bg-slate-900 border-slate-900 hover:bg-slate-800 hover:border-slate-800 shadow-none"
-                      onClick={() => navigate(`/learn/${continueCourse.id}`)}
-                    >
-                      <Play size={14} className="mr-1.5" /> Resume
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
-                  <div className="flex items-center justify-between text-[11px] text-slate-500">
-                    <span className="font-semibold uppercase tracking-[0.18em] text-slate-400">Progress</span>
-                    <span className="font-bold text-slate-700">{continueProgress}%</span>
-                  </div>
-                  <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 transition-all duration-700"
-                      style={{ width: `${continueProgress}%` }}
-                    />
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : (
-              <div className="p-5 space-y-4">
+              <div className="space-y-3.5 p-4">
                 <div>
                   <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.24em]">Continue Learning</p>
                   <p className="mt-1 text-sm text-slate-600">Enroll in a course to start building momentum.</p>
@@ -265,10 +304,10 @@ function StudentDashboard({ user }) {
                 <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
                   <div className="flex items-center justify-between text-[11px] text-slate-500">
                     <span className="font-semibold uppercase tracking-[0.18em] text-slate-400">Overall Progress</span>
-                    <span className="font-bold text-slate-700">{continueProgress}%</span>
+                    <span className="font-bold text-slate-700">{overallProgress}%</span>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 transition-all duration-700" style={{ width: `${continueProgress}%` }} />
+                    <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 transition-all duration-700" style={{ width: `${overallProgress}%` }} />
                   </div>
                 </div>
               </div>
@@ -278,26 +317,23 @@ function StudentDashboard({ user }) {
 
         <div>
           <Card className="anim-fade-up border-slate-200/60 shadow-sm overflow-hidden">
-            <div className="px-5 pt-5 pb-4 border-b border-slate-100 bg-[linear-gradient(180deg,#f8fafc_0%,rgba(248,250,252,0.55)_100%)]">
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.24em]">Skills Progress</p>
-              <p className="mt-1 text-sm text-slate-600">Track how your core skills are improving.</p>
-            </div>
             {loading ? (
-              <div className="grid grid-cols-1 gap-3 p-5">
-                {skillSkeletonItems.map((index) => (
-                  <div key={index} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-10 w-10 rounded-xl" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-28 rounded-full" />
-                        <Skeleton className="h-3 w-20 rounded-full" />
-                      </div>
-                    </div>
-                    <Skeleton className="mt-3 h-2 w-full rounded-full" />
-                  </div>
-                ))}              </div>
+              <div className="p-3">
+                <div className="border-b border-slate-100 bg-[linear-gradient(180deg,#f8fafc_0%,rgba(248,250,252,0.55)_100%)] px-4 pt-3 pb-3">
+                  <div className="skeleton h-3 w-32 rounded-full" />
+                  <div className="mt-2 skeleton h-4 w-52 rounded-full" />
+                </div>
+                <div className="grid grid-cols-1 gap-2.5 pt-3">
+                  {[1, 2, 3].map((index) => <SkeletonStat key={index} />)}
+                </div>
+              </div>
             ) : skills.length ? (
-              <div className="grid grid-cols-1 gap-3 p-5">
+              <>
+                <div className="border-b border-slate-100  px-4 pt-3 pb-2.5">
+                  <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.24em]">Skills Progress</p>
+                  <p className="mt-1 text-sm text-slate-600">Track how your core skills are improving.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-2 p-3">
                 {skills.map((skill, index) => {
                   const name = skill.name || skill.skill || `Skill ${index + 1}`;
                   const progress = Number(skill.progress ?? skill.percentage ?? 0);
@@ -315,9 +351,9 @@ function StudentDashboard({ user }) {
                   const barColor = index % 4 === 0 ? 'bg-emerald-500' : index % 4 === 1 ? 'bg-indigo-500' : index % 4 === 2 ? 'bg-amber-500' : 'bg-blue-500';
 
                   return (
-                    <div key={name} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
-                      <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-xl ${iconBg} flex items-center justify-center`}>
+                    <div key={name} className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
+                      <div className="flex items-center gap-2">
+                        <div className={`flex h-8.5 w-8.5 items-center justify-center rounded-xl ${iconBg}`}>
                           <Icon size={18} className={iconColor} />
                         </div>
                         <div>
@@ -325,27 +361,34 @@ function StudentDashboard({ user }) {
                           <p className="text-xs text-slate-500">{progress}% completed</p>
                         </div>
                       </div>
-                      <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
                         <div className={`h-full ${barColor} transition-all duration-700`} style={{ width: `${progress}%` }} />
                       </div>
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              </>
             ) : (
-              <div className="p-5">
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)] flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
-                  <Award size={18} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">No skill milestones yet</p>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Skills will appear after you complete lessons and assessments.
-                    </p>
+              <>
+                <div className="border-b border-slate-100 bg-[linear-gradient(180deg,#f8fafc_0%,rgba(248,250,252,0.55)_100%)] px-4 pt-3 pb-2.5">
+                  <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.24em]">Skills Progress</p>
+                  <p className="mt-1 text-sm text-slate-600">Track how your core skills are improving.</p>
+                </div>
+                <div className="p-3">
+                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)] flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                    <Award size={18} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">No skill milestones yet</p>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Skills will appear after you complete lessons and assessments.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </>
             )}
           </Card>
         </div>
@@ -353,7 +396,7 @@ function StudentDashboard({ user }) {
 
       <div>
         <Card padding={false} className="anim-fade-up border-slate-200/60 shadow-sm h-full overflow-hidden">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-4">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-white rounded-lg shadow-sm ring-1 ring-slate-100">
                 <Calendar size={16} className="text-indigo-600" />
@@ -369,7 +412,7 @@ function StudentDashboard({ user }) {
               [1, 2, 3].map((index) => <SkeletonStat key={index} />)
             ) : (Array.isArray(stats?.upcoming_tasks) ? stats.upcoming_tasks : []).length ? (
               (Array.isArray(stats?.upcoming_tasks) ? stats.upcoming_tasks : []).map((task, index) => (
-                <div key={index} className="p-4 hover:bg-slate-50 transition-colors flex items-center gap-4">
+                <div key={index} className="flex items-center gap-3 p-3.5 transition-colors hover:bg-slate-50">
                   <div className={`p-2 rounded-lg ${
                     task.type === 'Assessment' ? 'bg-red-50' : task.type === 'Project' ? 'bg-amber-50' : 'bg-blue-50'
                   }`}>
@@ -395,7 +438,7 @@ function StudentDashboard({ user }) {
                 </div>
               ))
             ) : (
-              <div className="p-6 flex items-center gap-3">
+              <div className="flex items-center gap-3 p-5">
                 <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
                   <Calendar size={16} />
                 </div>
@@ -414,7 +457,7 @@ function StudentDashboard({ user }) {
 
       <div>
         <Card padding={false} className="anim-fade-up border-slate-200/60 shadow-sm overflow-hidden h-full">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/50 p-4">
             <h3 className="text-xl font-bold text-slate-900">Recent Activity</h3>
             {!loading && allActivityItems.length > 5 && (
               <Button
@@ -450,7 +493,7 @@ function StudentDashboard({ user }) {
                 const bg = type === 'assessment' ? 'bg-blue-50' : type === 'enrollment' ? 'bg-indigo-50' : type === 'task' ? 'bg-amber-50' : 'bg-emerald-50';
 
                 return (
-                  <div key={index} className="p-4 flex items-center gap-3">
+                  <div key={index} className="flex items-center gap-2.5 p-3.5">
                     <div className={`h-9 w-9 rounded-full ${bg} flex items-center justify-center`}>
                       <Icon size={16} className={color} />
                     </div>
@@ -607,19 +650,25 @@ function AdminDashboard({ user }) {
           <div className="space-y-3">
             {Array.isArray(data?.top_students) && data.top_students.length ? (
               data.top_students.slice(0, 5).map((student, index) => (
-                <div key={student.id || index} className="flex items-center gap-3">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${index === 0 ? 'bg-amber-100 text-amber-700' : index === 1 ? 'bg-slate-100 text-slate-600' : index === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
+                <div key={student.id || index} className="flex items-center gap-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-600">
                     {index + 1}
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
-                    {student.full_name?.[0]?.toUpperCase() || 'S'}
-                  </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-[0_1_220px]">
                     <p className="text-sm font-semibold text-slate-900 truncate">{student.full_name}</p>
-                    <p className="text-xs text-slate-500">Courses: {student.completed_courses} | Score: {student.avg_score}%</p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                      <span>Courses: {student.completed_courses}</span>
+                      <span>Score: {student.avg_score}%</span>
+                    </div>
                   </div>
-                  <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, student.performance_score || 0)}%` }} />
+                  <div className="ml-auto w-[112px] flex-shrink-0">
+                    <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                      <span>Performance</span>
+                      <span>{Math.round(Math.min(100, student.performance_score || 0))}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, student.performance_score || 0)}%` }} />
+                    </div>
                   </div>
                 </div>
               ))

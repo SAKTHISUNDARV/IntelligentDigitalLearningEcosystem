@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle, PlayCircle, FileText, ClipboardList,
@@ -92,7 +92,7 @@ export default function Learning() {
       setLoading(true);
       fetchCourseData();
     }
-  }, [courseId]);
+  }, [courseId, fetchCourseData]);
 
   const toggleModule = (modId) => {
     setExpandedModules(prev => ({ ...prev, [modId]: !prev[modId] }));
@@ -146,7 +146,7 @@ export default function Learning() {
         setLastSavedNotes(notes);
         setNotesStatus('saved');
         setTimeout(() => setNotesStatus(''), 2000);
-      } catch (e) {
+      } catch {
         setNotesStatus('error');
       }
     }, 2000);
@@ -575,3 +575,4 @@ export default function Learning() {
     </div>
   );
 }
+

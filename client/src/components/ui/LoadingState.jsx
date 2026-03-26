@@ -18,16 +18,16 @@ export function CenteredPageSkeleton() {
 export function ProfilePageSkeleton() {
   return (
     <div className="space-y-6 pb-10">
-      <div className="overflow-hidden rounded-[16px] border border-slate-200 bg-white shadow-[0_8px_20px_rgba(108,99,255,0.12)]">
-        <div className="p-6 bg-[linear-gradient(135deg,#6C63FF,#7C7AFF)]">
+      <div className="overflow-hidden rounded-[16px] border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
+        <div className="p-6 bg-white">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
-            <Skeleton className="h-[72px] w-[72px] rounded-2xl bg-white/20" />
+            <Skeleton className="h-[72px] w-[72px] rounded-2xl" />
             <div className="flex-1 space-y-3">
-              <Skeleton className="h-6 w-48 rounded-full bg-white/25" />
-              <Skeleton className="h-4 w-64 rounded-full bg-white/20" />
-              <Skeleton className="h-4 w-40 rounded-full bg-white/20" />
+              <Skeleton className="h-6 w-48 rounded-full" />
+              <Skeleton className="h-4 w-64 rounded-full" />
+              <Skeleton className="h-4 w-40 rounded-full" />
             </div>
-            <Skeleton className="h-10 w-32 rounded-lg bg-white/20" />
+            <Skeleton className="h-10 w-32 rounded-lg" />
           </div>
         </div>
       </div>

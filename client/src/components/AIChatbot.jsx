@@ -244,7 +244,7 @@ export default function AIChatbot() {
     [activeConversationId, conversations]
   );
 
-  const messages = activeConversation?.messages || [];
+  const messages = useMemo(() => activeConversation?.messages || [], [activeConversation]);
   const visibleMessages = useMemo(() => messages.slice(Math.max(0, messages.length - visibleCount)), [messages, visibleCount]);
   const hiddenCount = Math.max(0, messages.length - visibleMessages.length);
   const effectiveRole = contextData?.userRole || (user?.role === 'admin' ? 'super_admin' : user?.role || 'student');
@@ -272,7 +272,7 @@ export default function AIChatbot() {
       }
 
       setInput(savedDraft);
-    } catch (error) {
+    } catch {
       const starterConversation = createConversation();
       setConversations([starterConversation]);
       setActiveConversationId(starterConversation.id);

@@ -120,7 +120,6 @@ export default function CourseDetail() {
     '';
   const courseImage = getCourseImage({ ...course, preview_content_url: derivedPreviewContentUrl });
   const totalLessons = modules.reduce((sum, mod) => sum + (mod.lessons?.length || 0), 0);
-  const totalMaterials = modules.reduce((sum, mod) => sum + (mod.materials?.length || 0), 0);
   const moduleQuizCount = modules.reduce((sum, mod) => sum + (mod.quiz ? 1 : 0), 0);
   const totalQuizzes = moduleQuizCount + finalQuizzes.length;
 

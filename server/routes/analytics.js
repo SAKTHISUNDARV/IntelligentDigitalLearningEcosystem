@@ -201,12 +201,50 @@ router.get('/admin', authenticateToken, requireRole('admin'), async (req, res) =
        GROUP BY c.id, u.full_name ORDER BY enrollment_count DESC LIMIT 5`
     );
 
+    const [categoryScores] = await pool.query(`
+      SELECT
+        cat.name AS category,
+        COALESCE(ROUND(AVG(a.score), 1), 0) AS avg_score
+      FROM categories cat
+      JOIN courses c ON c.category_id = cat.id
+      LEFT JOIN quizzes q ON q.course_id = c.id
+      LEFT JOIN assessments a ON a.quiz_id = q.id
+      GROUP BY cat.id, cat.name
+      ORDER BY avg_score DESC, cat.name ASC
+    `);
+
+    const [topStudents] = await pool.query(`
+      SELECT
+        u.id,
+        u.full_name,
+        COUNT(DISTINCT CASE WHEN e.completed = TRUE OR e.progress = 100 THEN e.course_id END)::int AS completed_courses,
+        COALESCE(ROUND(AVG(a.score), 1), 0) AS avg_score,
+        ROUND(
+          (
+            COALESCE(AVG(a.score), 0) * 0.7
+          ) + (
+            COALESCE(AVG(e.progress), 0) * 0.3
+          ),
+          1
+        ) AS performance_score
+      FROM users u
+      LEFT JOIN enrollments e ON e.student_id = u.id
+      LEFT JOIN assessments a ON a.user_id = u.id
+      WHERE u.role = 'student'
+      GROUP BY u.id, u.full_name
+      HAVING COUNT(a.id) > 0 OR COUNT(e.id) > 0
+      ORDER BY performance_score DESC, avg_score DESC, completed_courses DESC, u.full_name ASC
+      LIMIT 10
+    `);
+
     res.json({
       users: userStats,
       courses: courseStats,
       enrollments: enrollStats,
       assessments: assessStats,
-      top_courses: topCourses
+      top_courses: topCourses,
+      category_scores: categoryScores,
+      top_students: topStudents
     });
   } catch (err) {
     console.error('[GET /analytics/admin]', err);

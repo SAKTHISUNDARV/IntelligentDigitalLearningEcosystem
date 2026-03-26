@@ -1,6 +1,6 @@
 // pages/Courses.jsx — Professional course browse
 import { useState, useEffect } from 'react';
-import { Search, BookOpen, ChevronRight, GraduationCap, ChevronDown, Play } from 'lucide-react';
+import { Search, BookOpen, GraduationCap, ChevronDown, Play, SlidersHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -176,7 +176,7 @@ export default function Courses() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 anim-fade-up">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 anim-fade-up relative z-20 overflow-visible">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
           <div>
             <h1 className="text-xl font-bold">
@@ -200,19 +200,20 @@ export default function Courses() {
               />
             </div>
 
-            <div className="relative">
+            <div className="relative z-30">
               <button
                 onClick={() => setShowFilterMenu(!showFilterMenu)}
-                className="flex items-center gap-2 h-10 px-3.5 text-sm font-medium text-slate-700 bg-white border border-slate-200
-                           rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all whitespace-nowrap"
+                className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-700
+                           transition-all hover:border-slate-300 hover:bg-slate-50 whitespace-nowrap"
                 style={{ height: '42px' }}
               >
-                Filter
-                <ChevronDown size={18} className={`transition-transform duration-200 ${showFilterMenu ? 'rotate-180' : ''}`} />
+                <SlidersHorizontal size={16} className="text-slate-500" />
+                <span>Filter</span>
+                <ChevronDown size={16} className={`text-slate-500 transition-transform duration-200 ${showFilterMenu ? 'rotate-180' : ''}`} />
               </button>
 
               {showFilterMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-lg z-50">
+                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-slate-200 bg-white shadow-[0_20px_45px_-20px_rgba(15,23,42,0.28)] z-[70]">
                   <div className="p-2">
                     <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2 px-3 py-1">Categories</p>
                     {categories.map(cat => (
