@@ -1,6 +1,5 @@
-// pages/MyCourses.jsx - Enrolled courses library
 import { useState, useEffect, useMemo } from 'react';
-import { BookOpen, Play, CheckCircle, GraduationCap, XCircle } from 'lucide-react';
+import { BookOpen, Play, CheckCircle, GraduationCap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Badge from '../components/ui/Badge';
@@ -8,6 +7,9 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { SkeletonCard, SkeletonStat } from '../components/ui/Skeleton';
 import { getCourseImage, getFallbackBanner } from '../utils/courseImages';
+import confirmAction from '../utils/confirm';
+import notify from '../utils/notify';
+import { getCachedValue, setCachedValue, invalidateCache } from '../utils/requestCache';
 
 const levelColor = {
   beginner: 'from-teal-500 to-emerald-600',
@@ -23,9 +25,7 @@ const TABS = [
 
 const getProgress = (course) => Math.max(0, Math.min(100, Math.round(Number(course.progress || 0))));
 const isCompleted = (course) => Boolean(course.completed) || getProgress(course) >= 100;
-
-import confirmAction from '../utils/confirm';
-import notify from '../utils/notify';
+const MY_COURSES_CACHE_KEY = '/courses/student/enrolled';
 
 function CourseCard({ course, navigate }) {
   const pct = getProgress(course);
@@ -111,7 +111,6 @@ function CourseCard({ course, navigate }) {
             >
               {completed ? <><CheckCircle size={14} /> Continue</> : <><Play size={14} className="fill-current" /> Continue</>}
             </Button>
-            
           </div>
         </div>
       </div>
@@ -121,15 +120,37 @@ function CourseCard({ course, navigate }) {
 
 export default function MyCourses() {
   const navigate = useNavigate();
-  const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedCourses = getCachedValue(MY_COURSES_CACHE_KEY);
+  const [courses, setCourses] = useState(() => cachedCourses?.data || []);
+  const [loading, setLoading] = useState(() => !cachedCourses);
   const [tab, setTab] = useState('all');
 
   useEffect(() => {
+    let cancelled = false;
+    const cached = getCachedValue(MY_COURSES_CACHE_KEY);
+    if (cached) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setCourses(Array.isArray(cached.data) ? cached.data : []);
+        setLoading(false);
+      });
+    }
+
     api.get('/courses/student/enrolled')
-      .then((r) => setCourses(Array.isArray(r.data) ? r.data : []))
+      .then((r) => {
+        if (cancelled) return;
+        const nextCourses = Array.isArray(r.data) ? r.data : [];
+        setCachedValue(MY_COURSES_CACHE_KEY, nextCourses);
+        setCourses(nextCourses);
+      })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const activeCourses = useMemo(
@@ -152,8 +173,12 @@ export default function MyCourses() {
     if (!confirmed) return;
 
     try {
-      await api.post(`/courses/${courseId}/unenroll`);
-      setCourses(prev => prev.filter(c => c.id !== courseId));
+      await api.delete(`/courses/${courseId}/enroll`);
+      const nextCourses = courses.filter(c => c.id !== courseId);
+      setCourses(nextCourses);
+      setCachedValue(MY_COURSES_CACHE_KEY, nextCourses);
+      invalidateCache('/analytics/student');
+      invalidateCache(`/courses/${courseId}`);
       notify.success('Unenrolled successfully');
     } catch (err) {
       notify.error('Failed to unenroll', err.response?.data?.error || 'Error');
@@ -254,4 +279,7 @@ export default function MyCourses() {
     </div>
   );
 }
+
+
+
 

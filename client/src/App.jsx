@@ -1,4 +1,3 @@
-// App.jsx — Main router: Admin + Student only, no instructor
 import { createBrowserRouter, RouterProvider, createRoutesFromElements, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
@@ -8,12 +7,10 @@ import DashboardLayout from './components/DashboardLayout';
 import RootError from './components/RootError';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Auth and Landing pages
 const Landing = lazy(() => import('./pages/Landing'));
 import Login from './pages/Login';
 import Register from './pages/Register';
 
-// Lazy-loaded shared pages
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Courses = lazy(() => import('./pages/Courses'));
 const CourseDetail = lazy(() => import('./pages/CourseDetail'));
@@ -25,9 +22,6 @@ const Profile = lazy(() => import('./pages/Profile'));
 const ManageTasks = lazy(() => import('./pages/ManageTasks'));
 const AssessmentResultPage = lazy(() => import('./pages/AssessmentResultPage'));
 const SearchResults = lazy(() => import('./pages/SearchResults'));
-
-
-// Admin pages
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminCategories = lazy(() => import('./pages/admin/AdminCategories'));
 const AdminCourses = lazy(() => import('./pages/admin/AdminCourses'));
@@ -43,53 +37,59 @@ function PageLoader() {
   );
 }
 
-function DashPage({ children, roles, fullBleed }) {
-  return (
-    <ProtectedRoute roles={roles}>
-      <DashboardLayout fullBleed={fullBleed}>
-        <Suspense fallback={<PageLoader />}>{children}</Suspense>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
+function Page(element) {
+  return <Suspense fallback={<PageLoader />}>{element}</Suspense>;
 }
 
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route errorElement={<RootError />}>
-      {/* ── Public ── */}
-      <Route path="/" element={<Suspense fallback={<PageLoader />}><Landing /></Suspense>} />
+      <Route path="/" element={Page(<Landing />)} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* ── Shared (all authenticated roles) ── */}
-      <Route path="/dashboard" element={<DashPage><Dashboard /></DashPage>} />
-      <Route path="/profile" element={<DashPage><Profile /></DashPage>} />
-      <Route path="/search" element={<DashPage><SearchResults /></DashPage>} />
-      <Route path="/ai-tutor" element={<DashPage fullBleed><AITutor /></DashPage>} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard" element={Page(<Dashboard />)} />
+          <Route path="/profile" element={Page(<Profile />)} />
+          <Route path="/search" element={Page(<SearchResults />)} />
 
-      {/* ── Student routes ── */}
-      <Route path="/courses" element={<DashPage roles={['student']}><Courses /></DashPage>} />
-      <Route path="/courses/:courseId" element={<DashPage roles={['student']}><CourseDetail /></DashPage>} />
-      <Route path="/my-courses" element={<DashPage roles={['student']}><MyCourses /></DashPage>} />
-      <Route path="/learn/:courseId" element={<DashPage roles={['student', 'admin']} fullBleed><Learning /></DashPage>} />
-      <Route path="/assessments" element={<DashPage roles={['student']}><Assessments /></DashPage>} />
-      <Route path="/assessments/take/:quizId" element={
-        <ProtectedRoute roles={['student']}>
-          <Suspense fallback={<PageLoader />}><TakeAssessment /></Suspense>
-        </ProtectedRoute>
-      } />
-      <Route path="/assessment-history" element={<DashPage roles={['student']}><AssessmentHistory /></DashPage>} />
-      <Route path="/assessment-result/:attemptId" element={<DashPage roles={['student']}><AssessmentResultPage /></DashPage>} />
-      <Route path="/manage-tasks" element={<DashPage roles={['student']}><ManageTasks /></DashPage>} />
+          <Route element={<ProtectedRoute roles={['student']} />}>
+            <Route path="/courses" element={Page(<Courses />)} />
+            <Route path="/courses/:courseId" element={Page(<CourseDetail />)} />
+            <Route path="/my-courses" element={Page(<MyCourses />)} />
+            <Route path="/assessments" element={Page(<Assessments />)} />
+            <Route path="/assessment-history" element={Page(<AssessmentHistory />)} />
+            <Route path="/assessment-result/:attemptId" element={Page(<AssessmentResultPage />)} />
+            <Route path="/manage-tasks" element={Page(<ManageTasks />)} />
+          </Route>
 
+          <Route element={<ProtectedRoute roles={['admin']} />}>
+            <Route path="/admin/users" element={Page(<AdminUsers />)} />
+            <Route path="/admin/categories" element={Page(<AdminCategories />)} />
+            <Route path="/admin/courses" element={Page(<AdminCourses />)} />
+            <Route path="/admin/quizzes" element={Page(<AdminQuizzes />)} />
+          </Route>
+        </Route>
 
-      {/* ── Admin routes ── */}
-      <Route path="/admin/users" element={<DashPage roles={['admin']}><AdminUsers /></DashPage>} />
-      <Route path="/admin/categories" element={<DashPage roles={['admin']}><AdminCategories /></DashPage>} />
-      <Route path="/admin/courses" element={<DashPage roles={['admin']}><AdminCourses /></DashPage>} />
-      <Route path="/admin/quizzes" element={<DashPage roles={['admin']}><AdminQuizzes /></DashPage>} />
+        <Route element={<DashboardLayout fullBleed />}>
+          <Route path="/ai-tutor" element={Page(<AITutor />)} />
 
-      {/* ── Fallback ── */}
+          <Route element={<ProtectedRoute roles={['student', 'admin']} />}>
+            <Route path="/learn/:courseId" element={Page(<Learning />)} />
+          </Route>
+        </Route>
+      </Route>
+
+      <Route
+        path="/assessments/take/:quizId"
+        element={
+          <ProtectedRoute roles={['student']}>
+            {Page(<TakeAssessment />)}
+          </ProtectedRoute>
+        }
+      />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>
   )

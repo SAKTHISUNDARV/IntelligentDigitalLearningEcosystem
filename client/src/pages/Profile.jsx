@@ -11,6 +11,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import { ProfilePageSkeleton } from '../components/ui/LoadingState';
 import notify from '../utils/notify';
+import { getCachedValue, setCachedValue } from '../utils/requestCache';
 
 const roleMeta = {
   student: { label: 'Student', badge: 'bg-white/20 text-white border border-white/25' },
@@ -41,15 +42,20 @@ const formatDateTime = (dateValue) => {
   });
 };
 
+const PROFILE_ANALYTICS_CACHE_KEY = '/profile/student/analytics';
+const PROFILE_COURSES_CACHE_KEY = '/profile/student/enrolled';
+
 export default function Profile() {
   const { user, updateUser } = useAuth();
-  const [stats, setStats] = useState(null);
-  const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const cachedStats = getCachedValue(PROFILE_ANALYTICS_CACHE_KEY);
+  const cachedEnrolledCourses = getCachedValue(PROFILE_COURSES_CACHE_KEY);
+  const [stats, setStats] = useState(() => cachedStats?.data || null);
+  const [enrolledCourses, setEnrolledCourses] = useState(() => cachedEnrolledCourses?.data || []);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({ full_name: '' });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => user?.role === 'student' ? !(cachedStats && cachedEnrolledCourses) : false);
 
   const rm = roleMeta[user?.role] || roleMeta.student;
   const initials = user?.full_name?.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
@@ -61,14 +67,29 @@ export default function Profile() {
     }
     
     if (user?.role === 'student') {
-      setLoading(true);
+      let cancelled = false;
+
       Promise.all([
-        api.get('/analytics/student').then((r) => setStats(r.data)).catch(() => {}),
-        api.get('/courses/student/enrolled').then((r) => setEnrolledCourses(Array.isArray(r.data) ? r.data : [])).catch(() => {}),
-      ]).finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+        api.get('/analytics/student').catch(() => ({ data: {} })),
+        api.get('/courses/student/enrolled').catch(() => ({ data: [] })),
+      ]).then(([statsResponse, coursesResponse]) => {
+        if (cancelled) return;
+        const nextStats = statsResponse.data || {};
+        const nextCourses = Array.isArray(coursesResponse.data) ? coursesResponse.data : [];
+        setCachedValue(PROFILE_ANALYTICS_CACHE_KEY, nextStats);
+        setCachedValue(PROFILE_COURSES_CACHE_KEY, nextCourses);
+        setStats(nextStats);
+        setEnrolledCourses(nextCourses);
+      }).finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+      return () => {
+        cancelled = true;
+      };
     }
+
+    setLoading(false);
   }, [user]);
   const recentCompletedCourses = useMemo(() => {
     const analyticsCompleted = Array.isArray(stats?.completed_courses) ? stats.completed_courses : [];
@@ -257,3 +278,4 @@ export default function Profile() {
     </div>
   );
 }
+

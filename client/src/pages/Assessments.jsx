@@ -5,18 +5,43 @@ import api from '../services/api';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { AssessmentGridSkeleton } from '../components/ui/LoadingState';
+import { getCachedValue, setCachedValue } from '../utils/requestCache';
+
+const ASSESSMENTS_CACHE_KEY = '/quizzes/available';
 
 export default function Assessments() {
   const navigate = useNavigate();
-  const [quizzes, setQuizzes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedQuizzes = getCachedValue(ASSESSMENTS_CACHE_KEY);
+  const [quizzes, setQuizzes] = useState(() => cachedQuizzes?.data || []);
+  const [loading, setLoading] = useState(() => !cachedQuizzes);
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
+    let cancelled = false;
+    const cached = getCachedValue(ASSESSMENTS_CACHE_KEY);
+    if (cached) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setQuizzes(Array.isArray(cached.data) ? cached.data : []);
+        setLoading(false);
+      });
+    }
+
     api.get('/quizzes/available')
-      .then((response) => setQuizzes(Array.isArray(response.data) ? response.data : []))
+      .then((response) => {
+        if (cancelled) return;
+        const nextQuizzes = Array.isArray(response.data) ? response.data : [];
+        setCachedValue(ASSESSMENTS_CACHE_KEY, nextQuizzes);
+        setQuizzes(nextQuizzes);
+      })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filterOptions = [
@@ -184,3 +209,7 @@ export default function Assessments() {
     </div>
   );
 }
+
+
+
+

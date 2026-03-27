@@ -1,4 +1,3 @@
-// pages/Courses.jsx — Professional course browse
 import { useState, useEffect } from 'react';
 import { Search, BookOpen, GraduationCap, ChevronDown, Play, SlidersHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -9,11 +8,12 @@ import Badge from '../components/ui/Badge';
 import { SkeletonCard } from '../components/ui/Skeleton';
 import { getCourseImage, getFallbackBanner } from '../utils/courseImages';
 import notify from '../utils/notify';
+import { getCachedValue, setCachedValue, invalidateCache } from '../utils/requestCache';
 
-const levelColor = { 
-  beginner: 'from-teal-500 to-emerald-600', 
-  intermediate: 'from-amber-500 to-orange-600', 
-  advanced: 'from-rose-500 to-red-600' 
+const levelColor = {
+  beginner: 'from-teal-500 to-emerald-600',
+  intermediate: 'from-amber-500 to-orange-600',
+  advanced: 'from-rose-500 to-red-600'
 };
 
 const categoryColors = {
@@ -114,16 +114,19 @@ function CourseCard({ c, onEnroll, enrolling, navigate, isStudent }) {
 export default function Courses() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [courses, setCourses] = useState([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(null);
   const [category, setCategory] = useState('');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const limit = 12;
+
+  const cacheKey = `/courses::${debouncedSearch}::${page}::${limit}::${category}`;
+  const cachedCourses = getCachedValue(cacheKey);
+  const [courses, setCourses] = useState(() => cachedCourses?.data?.courses || []);
+  const [total, setTotal] = useState(() => cachedCourses?.data?.total || 0);
+  const [loading, setLoading] = useState(() => !cachedCourses);
 
   const categories = [
     { value: '', label: 'All Categories' },
@@ -137,7 +140,6 @@ export default function Courses() {
     { value: 'UI/UX Design', label: 'UI/UX Design' },
   ];
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
@@ -145,17 +147,36 @@ export default function Courses() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch courses
   useEffect(() => {
-    setLoading(true);
+    const cached = getCachedValue(cacheKey);
+    if (cached) {
+      setCourses(cached.data.courses || []);
+      setTotal(cached.data.total || 0);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    let cancelled = false;
+
     api.get('/courses', { params: { search: debouncedSearch, page, limit, category } })
-      .then(r => { 
-        setCourses(r.data.courses || r.data); 
-        setTotal(r.data.total || r.data.length); 
+      .then(r => {
+        if (cancelled) return;
+        const nextCourses = r.data.courses || r.data;
+        const nextTotal = r.data.total || r.data.length;
+        setCachedValue(cacheKey, { courses: nextCourses, total: nextTotal });
+        setCourses(nextCourses);
+        setTotal(nextTotal);
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [debouncedSearch, page, category]);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cacheKey, debouncedSearch, page, category]);
 
   const enroll = async (courseId, e) => {
     e.stopPropagation();
@@ -164,11 +185,14 @@ export default function Courses() {
     try {
       await api.post(`/courses/${courseId}/enroll`);
       setCourses(cs => cs.map(c => c.id === courseId ? { ...c, is_enrolled: true } : c));
+      invalidateCache('/courses/student/enrolled');
+      invalidateCache('/analytics/student');
+      invalidateCache(`/courses/${courseId}`);
       notify.success('Enrollment successful', 'The course is now available in My Courses.');
-    } catch (err) { 
-      notify.error('Enrollment failed', err.response?.data?.error || 'Enrollment failed'); 
-    } finally { 
-      setEnrolling(null); 
+    } catch (err) {
+      notify.error('Enrollment failed', err.response?.data?.error || 'Enrollment failed');
+    } finally {
+      setEnrolling(null);
     }
   };
 
@@ -272,13 +296,13 @@ export default function Courses() {
       {pages > 1 && (
         <div className="flex justify-center items-center gap-3 pt-6">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-            ← Prev
+            Prev
           </Button>
           <span className="text-sm text-slate-500 font-medium px-2">
             Page {page} of {pages}
           </span>
           <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>
-            Next →
+            Next
           </Button>
         </div>
       )}

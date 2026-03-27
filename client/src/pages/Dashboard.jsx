@@ -11,13 +11,20 @@ import Card, { CardHeader, CardTitle } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { SkeletonStat } from '../components/ui/Skeleton';
+import { getCachedValue, setCachedValue } from '../utils/requestCache';
+
+const STUDENT_DASHBOARD_STATS_CACHE_KEY = '/analytics/student';
+const STUDENT_DASHBOARD_COURSES_CACHE_KEY = '/courses/student/enrolled';
+const ADMIN_DASHBOARD_CACHE_KEY = '/analytics/admin';
 
 /* Student Dashboard */
 function StudentDashboard({ user }) {
   const navigate = useNavigate();
-  const [stats, setStats] = useState(null);
-  const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedStats = getCachedValue(STUDENT_DASHBOARD_STATS_CACHE_KEY);
+  const cachedCourses = getCachedValue(STUDENT_DASHBOARD_COURSES_CACHE_KEY);
+  const [stats, setStats] = useState(() => cachedStats?.data || null);
+  const [courses, setCourses] = useState(() => cachedCourses?.data || []);
+  const [loading, setLoading] = useState(() => !(cachedStats && cachedCourses));
   const [showAllActivities, setShowAllActivities] = useState(false);
 
   useEffect(() => {
@@ -28,8 +35,12 @@ function StudentDashboard({ user }) {
       api.get('/courses/student/enrolled').catch(() => ({ data: [] })),
     ]).then(([s, t]) => {
       if (cancelled) return;
-      setStats(s.data);
-      setCourses(Array.isArray(t.data) ? t.data : []);
+      const nextStats = s.data || {};
+      const nextCourses = Array.isArray(t.data) ? t.data : [];
+      setCachedValue(STUDENT_DASHBOARD_STATS_CACHE_KEY, nextStats);
+      setCachedValue(STUDENT_DASHBOARD_COURSES_CACHE_KEY, nextCourses);
+      setStats(nextStats);
+      setCourses(nextCourses);
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -518,8 +529,9 @@ function StudentDashboard({ user }) {
 /* Admin Dashboard */
 function AdminDashboard({ user }) {
   const navigate = useNavigate();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const cachedAdminData = getCachedValue(ADMIN_DASHBOARD_CACHE_KEY);
+  const [data, setData] = useState(() => cachedAdminData?.data || null);
+  const [loading, setLoading] = useState(() => !cachedAdminData);
 
   const formatDateTime = (dateStr) => {
     if (!dateStr) return 'Not available';
@@ -536,7 +548,19 @@ function AdminDashboard({ user }) {
   };
 
   useEffect(() => {
-    api.get('/analytics/admin').then((response) => setData(response.data)).catch(console.error).finally(() => setLoading(false));
+    let cancelled = false;
+
+    api.get('/analytics/admin').then((response) => {
+      if (cancelled) return;
+      setCachedValue(ADMIN_DASHBOARD_CACHE_KEY, response.data);
+      setData(response.data);
+    }).catch(console.error).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -738,3 +762,5 @@ export default function Dashboard() {
   if (user?.role === 'admin') return <AdminDashboard user={user} />;
   return <StudentDashboard user={user} />;
 }
+
+

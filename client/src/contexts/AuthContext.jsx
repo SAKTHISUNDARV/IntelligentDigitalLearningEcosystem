@@ -2,6 +2,7 @@
 // contexts/AuthContext.jsx — Global auth state with JWT + localStorage persistence
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { clearCache } from '../utils/requestCache';
 
 const AuthContext = createContext(null);
 const readStoredAuth = () => {
@@ -55,6 +56,7 @@ export function AuthProvider({ children }) {
         }
 
         function onAuthCleared() {
+            clearCache();
             setToken(null);
             setUser(null);
         }
@@ -68,6 +70,7 @@ export function AuthProvider({ children }) {
     }, []);
 
     const login = useCallback(async (email, password) => {
+        clearCache();
         const { data } = await api.post('/auth/login', { email, password });
         const { access_token, refresh_token, user: userData } = data;
 
@@ -83,6 +86,7 @@ export function AuthProvider({ children }) {
 
     const logout = useCallback(async () => {
         try { await api.post('/auth/logout'); } catch { /* ignore */ }
+        clearCache();
         // Clear all platform-related storage
         [localStorage, sessionStorage].forEach(storage => {
             Object.keys(storage).forEach(key => {
