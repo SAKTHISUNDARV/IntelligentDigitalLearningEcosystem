@@ -9,7 +9,7 @@
 --   ❌ Fake seed users: alice, bob, carol, instructor2
 --   ❌ ALL enrollments (start fresh — real user re-enrolls naturally)
 --   ❌ ALL assessments / quiz submissions
---   ❌ ALL certificates
+--   ❌ unused tables like certificates / notifications
 -- ============================================================
 USE idle_db;
 
@@ -20,14 +20,6 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 -- Delete assessments for fake users
 DELETE FROM assessments
-WHERE user_id IN (
-  SELECT id FROM users WHERE email IN (
-    'alice@idle.dev','bob@idle.dev','carol@idle.dev','instructor2@idle.dev'
-  )
-);
-
--- Delete certificates for fake users
-DELETE FROM certificates
 WHERE user_id IN (
   SELECT id FROM users WHERE email IN (
     'alice@idle.dev','bob@idle.dev','carol@idle.dev','instructor2@idle.dev'
@@ -47,10 +39,9 @@ DELETE FROM users
 WHERE email IN ('alice@idle.dev','bob@idle.dev','carol@idle.dev','instructor2@idle.dev');
 
 -- ── Clear all transactional data that was seeded ──────────────
--- This resets ALL enrollments/assessments/certificates so only
+-- This resets ALL enrollments/assessments so only
 -- real user actions remain going forward.
 
-DELETE FROM certificates;
 DELETE FROM assessments;
 DELETE FROM enrollments;
 
@@ -65,6 +56,6 @@ SELECT
   (SELECT COUNT(*) FROM quiz_questions) AS questions_kept,
   (SELECT COUNT(*) FROM enrollments)    AS enrollments_remaining,
   (SELECT COUNT(*) FROM assessments)    AS assessments_remaining,
-  (SELECT COUNT(*) FROM certificates)   AS certificates_remaining;
+  0                                    AS certificates_remaining;
 
 SELECT '✅ Database cleaned! All seed data removed. Courses and quizzes kept.' AS status;

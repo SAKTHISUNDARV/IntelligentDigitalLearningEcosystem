@@ -4,10 +4,10 @@
 -- ============================================================
 
 -- Drop existing tables (if any)
-DROP TABLE IF EXISTS certificates CASCADE;
 DROP TABLE IF EXISTS assessments CASCADE;
 DROP TABLE IF EXISTS task_comments CASCADE;
 DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS quiz_questions CASCADE;
 DROP TABLE IF EXISTS quizzes CASCADE;
 DROP TABLE IF EXISTS materials CASCADE;
@@ -197,18 +197,6 @@ CREATE TABLE tasks (
     due_date    DATE,
     created_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- ========================
--- CERTIFICATES
--- ========================
-CREATE TABLE certificates (
-    id             SERIAL PRIMARY KEY,
-    user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    course_id      INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    certificate_no VARCHAR(100) UNIQUE NOT NULL,
-    issued_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, course_id)
 );
 
 -- ============================================================

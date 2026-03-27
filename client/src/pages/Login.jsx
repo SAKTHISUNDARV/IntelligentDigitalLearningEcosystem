@@ -117,7 +117,7 @@ export default function Login() {
             </div>
           </form>
 
-          \
+          
 
           <div className="mt-4 border-t border-slate-100 flex flex-col items-center justify-center">
             <p className="text-[14px] text-slate-500">

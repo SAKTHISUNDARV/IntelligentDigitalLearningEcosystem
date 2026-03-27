@@ -22,7 +22,7 @@ async function runCleanup() {
               (SELECT COUNT(*) FROM quizzes)        AS quizzes,
               (SELECT COUNT(*) FROM enrollments)    AS enrollments,
               (SELECT COUNT(*) FROM assessments)    AS assessments,
-              (SELECT COUNT(*) FROM certificates)   AS certificates
+              0                                     AS certificates
         `);
 
         console.log('\n✅  Cleanup complete! Database state:');
