@@ -21,6 +21,18 @@ function embedUrl(url) {
   return null;
 }
 
+function normalizeExternalUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function isPdfUrl(url = '') {
+  return /\.pdf($|[?#])/i.test(url);
+}
+
 export default function Learning() {
   const { courseId } = useParams();
   const navigate = useNavigate();
@@ -366,6 +378,15 @@ export default function Learning() {
   const LessonViewer = () => {
     if (!activeItem) return null;
     const isQuizItem = activeItem.type === 'quiz' || activeItem.type === 'final_quiz';
+    const isLessonPdf = activeItem.type === 'lesson' && (
+      activeItem.data.lesson_type === 'pdf' || isPdfUrl(activeItem.data.content_url)
+    );
+    const pdfUrl = isLessonPdf
+      ? normalizeExternalUrl(activeItem.data.content_url)
+      : activeItem.type === 'material'
+        ? normalizeExternalUrl(activeItem.data.file_url)
+        : '';
+    const lessonUrl = normalizeExternalUrl(activeItem.data.content_url);
     const quizLocked =
       (activeItem.type === 'quiz' && !isModuleQuizUnlocked(activeItem.module)) ||
       (activeItem.type === 'final_quiz' && !isFinalQuizUnlocked());
@@ -386,6 +407,37 @@ export default function Learning() {
 
         <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm overflow-hidden">
           {activeItem.type === 'lesson' ? (
+            isLessonPdf ? (
+              <div className="bg-slate-50">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[#E5E7EB] bg-slate-50/60">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-500">
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.2em]">PDF Lesson</p>
+                      <p className="text-sm font-semibold text-slate-800">{activeItem.data.title}</p>
+                    </div>
+                  </div>
+                  <a
+                    href={pdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#6366F1] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-600"
+                  >
+                    Open PDF
+                  </a>
+                </div>
+                <div className="h-[70vh] min-h-[28rem] bg-white">
+                  <iframe
+                    key={activeItem.data.id}
+                    src={pdfUrl}
+                    title={activeItem.data.title}
+                    className="w-full h-full"
+                  />
+                </div>
+              </div>
+            ) : (
             <div className="aspect-video w-full bg-black">
               {embedUrl(activeItem.data.content_url) ? (
                 <iframe
@@ -401,7 +453,7 @@ export default function Learning() {
                   <PlayCircle size={48} className="opacity-20" />
                   <p className="text-sm font-medium">Video format not supported for direct preview</p>
                   <a 
-                    href={activeItem.data.content_url} 
+                    href={lessonUrl} 
                     target="_blank" 
                     rel="noreferrer"
                     className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-500 transition-colors"
@@ -410,7 +462,9 @@ export default function Learning() {
                   </a>
                 </div>
               )}
-            </div>          ) : activeItem.type === 'material' ? (
+            </div>
+            )
+          ) : activeItem.type === 'material' ? (
             <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
               <div className="flex items-center justify-between px-4 py-3 border-b border-[#E5E7EB] bg-slate-50/60">
                 <div className="flex items-center gap-3">
@@ -423,7 +477,7 @@ export default function Learning() {
                   </div>
                 </div>
                 <a
-                  href={activeItem.data.file_url}
+                  href={pdfUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 rounded-lg bg-[#6366F1] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-600"
@@ -431,8 +485,16 @@ export default function Learning() {
                   Open PDF
                 </a>
               </div>
+              <div className="h-[70vh] min-h-[28rem] bg-white border-b border-[#E5E7EB]">
+                <iframe
+                  key={activeItem.data.id}
+                  src={pdfUrl}
+                  title={activeItem.data.title}
+                  className="w-full h-full"
+                />
+              </div>
               <div className="px-4 py-3">
-                <p className="text-xs text-slate-500">This lesson includes a PDF study guide. Open it in a new tab to read and download.</p>
+                <p className="text-xs text-slate-500">If your browser blocks the embedded preview, use the Open PDF button to read or download it in a new tab.</p>
               </div>
             </div>
           ) : (
